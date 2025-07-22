@@ -1,0 +1,88 @@
+# infer.py
+
+import torch
+import sentencepiece as spm
+import argparse
+from models.transformer import MiniTransformer
+
+def greedy_decode(model, src_ids, sp, max_len, device):
+    model.eval()
+    src = torch.tensor(src_ids, dtype=torch.long, device=device).unsqueeze(0)
+    src_mask = (src == sp.PieceToId('[PAD]')).to(device)
+
+    # encoder output
+    with torch.no_grad():
+        memory = model.transformer.encoder(
+            model.positional_encoding(model.src_tok_emb(src) * (model.d_model ** 0.5)),
+            src_key_padding_mask=src_mask
+        )
+
+    # start with BOS
+    tgt_ids = [sp.PieceToId('[BOS]')]
+    for _ in range(max_len):
+        tgt_tensor = torch.tensor(tgt_ids, dtype=torch.long, device=device).unsqueeze(0)
+        tgt_mask = torch.triu(torch.ones((len(tgt_ids), len(tgt_ids)), device=device), diagonal=1).bool()
+        out = model.transformer.decoder(
+            model.positional_encoding(model.tgt_tok_emb(tgt_tensor) * (model.d_model ** 0.5)),
+            memory,
+            tgt_mask=tgt_mask,
+            memory_key_padding_mask=src_mask
+        )
+        logits = model.generator(out[:, -1, :])  # last token
+        next_id = logits.argmax(-1).item()
+        if next_id == sp.PieceToId('[EOS]'):
+            break
+        tgt_ids.append(next_id)
+
+    return tgt_ids
+
+def infer(args):
+    # load tokenizer
+    sp = spm.SentencePieceProcessor()
+    sp.Load(args.tokenizer + '.model')
+
+    # load model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    checkpoint = torch.load(args.model_path, map_location=device)
+    vocab_size = sp.GetPieceSize()
+    model = MiniTransformer(
+        vocab_size=vocab_size,
+        d_model=checkpoint['model_state'][list(checkpoint['model_state'].keys())[0]].shape[1],
+        nhead=args.nhead,
+        num_encoder_layers=args.enc_layers,
+        num_decoder_layers=args.dec_layers,
+        dim_feedforward=args.ff_dim,
+        dropout=args.dropout,
+        max_len=args.max_len,
+        pad_idx=sp.PieceToId('[PAD]')
+    ).to(device)
+    model.load_state_dict(checkpoint['model_state'])
+
+    # tokenize input
+    raw = args.text
+    src_ids = [sp.PieceToId('[BOS]')] + sp.EncodeAsIds(raw) + [sp.PieceToId('[EOS]')]
+    # generate
+    out_ids = greedy_decode(model, src_ids, sp, args.max_len, device)
+    # decode
+    tokens = [sp.IdToPiece(i) for i in out_ids[1:]]  # exclude BOS
+    # join and clean
+    text = sp.DecodePieces(tokens)
+    print(text)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Run inference on NL2Func Transformer")
+    parser.add_argument('--tokenizer', type=str, default='tokenizer/tokenizer',
+                        help="SentencePiece model prefix")
+    parser.add_argument('--model_path', type=str, default='saved/best_model.pt',
+                        help="Path to trained model checkpoint")
+    parser.add_argument('--text', type=str, required=True,
+                        help="Raw input text to convert")
+    parser.add_argument('--max_len', type=int, default=64,
+                        help="Max output length (in tokens)")
+    parser.add_argument('--nhead', type=int, default=4)
+    parser.add_argument('--enc_layers', type=int, default=3)
+    parser.add_argument('--dec_layers', type=int, default=3)
+    parser.add_argument('--ff_dim', type=int, default=512)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    args = parser.parse_args()
+    infer(args)
