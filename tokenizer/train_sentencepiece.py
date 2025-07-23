@@ -49,8 +49,11 @@ def train_sentencepiece(dataset_path: str,
     # Write all texts to a temp file, one line per example
     with NamedTemporaryFile('w', delete=False, encoding='utf-8') as tmp:
         for txt in texts:
-            # Replace newlines to keep one-sentence-per-line
-            line = txt.replace('\n', ' ')
+            # If txt is a dict, convert to string
+            if isinstance(txt, dict):
+                line = json.dumps(txt, ensure_ascii=False).replace('\n', ' ')
+            else:
+                line = str(txt).replace('\n', ' ')
             tmp.write(line + '\n')
         tmp_path = tmp.name
 
@@ -79,9 +82,9 @@ if __name__ == '__main__':
                         help="Path to JSON dataset")
     parser.add_argument('--prefix', type=str, default='tokenizer/tokenizer',
                         help="Prefix for output model files")
-    parser.add_argument('--vocab_size', type=int, default=8000,
+    parser.add_argument('--vocab_size', type=int, default=82,
                         help="Vocabulary size")
-    parser.add_argument('--model_type', type=str, default='unigram',
+    parser.add_argument('--model_type', type=str, default='char',
                         choices=['unigram', 'bpe', 'word', 'char'],
                         help="Type of SentencePiece model")
     args = parser.parse_args()
@@ -92,3 +95,7 @@ if __name__ == '__main__':
         vocab_size=args.vocab_size,
         model_type=args.model_type
     )
+
+    sp = spm.SentencePieceProcessor()
+    sp.Load("tokenizer/tokenizer.model")
+    print(sp.GetPieceSize()) 

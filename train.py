@@ -8,6 +8,7 @@ import argparse
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.nn.utils.rnn import pad_sequence
 import sentencepiece as spm
+from tqdm import tqdm
 
 from models.transformer import MiniTransformer
 
@@ -40,6 +41,9 @@ class NL2FuncDataset(Dataset):
         entry = self.examples[idx]
         src = entry['input']
         tgt = entry['output']
+        # If output is a dict, convert to string
+        if isinstance(tgt, dict):
+            tgt = json.dumps(tgt, ensure_ascii=False)
 
         # tokenize (adds BOS/EOS)
         src_ids = [self.tokenizer.PieceToId('[BOS]')] + \
@@ -78,8 +82,33 @@ def train(args):
     sp = spm.SentencePieceProcessor()
     sp.Load(sp_model)
 
+    # Print tokenizer config
+    print("Tokenizer config:")
+    print(f"  Vocab size: {sp.GetPieceSize()}")
+    print(f"  Model file: {sp_model}")
+    # Try to get model type from .vocab file
+    vocab_path = sp_model.replace('.model', '.vocab')
+    model_type = None
+    if os.path.exists(vocab_path):
+        with open(vocab_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('#'): continue
+                if 'unigram' in line: model_type = 'unigram'
+                elif 'bpe' in line: model_type = 'bpe'
+                elif 'word' in line: model_type = 'word'
+                elif 'char' in line: model_type = 'char'
+                break
+    print(f"  Model type: {model_type if model_type else 'unknown'}")
+    print(f"  Max length: {args.max_len}")
+
+    # Print training config
+    print("Training config:")
+    for k, v in vars(args).items():
+        print(f"  {k}: {v}")
+
     # dataset
     full_dataset = NL2FuncDataset(args.data, sp, max_len=args.max_len)
+    print(f"Dataset length: {len(full_dataset)} examples")
     val_size = int(len(full_dataset) * args.val_split)
     train_size = len(full_dataset) - val_size
     train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
@@ -116,7 +145,8 @@ def train(args):
     for epoch in range(1, args.epochs + 1):
         model.train()
         total_loss = 0
-        for src, tgt in train_loader:
+        train_iter = tqdm(train_loader, desc=f"Epoch {epoch} [train]", leave=False)
+        for src, tgt in train_iter:
             src, tgt = src.to(device), tgt.to(device)
             # prepare decoder input and target
             decoder_input = tgt[:, :-1]
@@ -131,6 +161,7 @@ def train(args):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+            train_iter.set_postfix(loss=loss.item())
 
         avg_train_loss = total_loss / len(train_loader)
 
@@ -138,7 +169,8 @@ def train(args):
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for src, tgt in val_loader:
+            val_iter = tqdm(val_loader, desc=f"Epoch {epoch} [val]", leave=False)
+            for src, tgt in val_iter:
                 src, tgt = src.to(device), tgt.to(device)
                 decoder_input = tgt[:, :-1]
                 decoder_target = tgt[:, 1:]
@@ -147,6 +179,7 @@ def train(args):
                 decoder_target = decoder_target.reshape(-1)
                 loss = criterion(logits, decoder_target)
                 val_loss += loss.item()
+                val_iter.set_postfix(loss=loss.item())
         avg_val_loss = val_loss / len(val_loader)
         scheduler.step(avg_val_loss)
 
@@ -171,12 +204,12 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='data/full_dataset.json')
     parser.add_argument('--tokenizer', type=str, default='tokenizer/tokenizer')
     parser.add_argument('--save_dir', type=str, default='saved')
-    parser.add_argument('--vocab_size', type=int, default=8000)
-    parser.add_argument('--max_len', type=int, default=128)
+    parser.add_argument('--vocab_size', type=int, default=82)
+    parser.add_argument('--max_len', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--d_model', type=int, default=256)
+    parser.add_argument('--d_model', type=int, default=512)
     parser.add_argument('--nhead', type=int, default=4)
     parser.add_argument('--enc_layers', type=int, default=3)
     parser.add_argument('--dec_layers', type=int, default=3)

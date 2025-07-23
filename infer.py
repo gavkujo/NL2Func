@@ -61,13 +61,19 @@ def infer(args):
     # tokenize input
     raw = args.text
     src_ids = [sp.PieceToId('[BOS]')] + sp.EncodeAsIds(raw) + [sp.PieceToId('[EOS]')]
+    src_ids = src_ids[:args.max_len]  # Ensure input fits positional encoding
     # generate
     out_ids = greedy_decode(model, src_ids, sp, args.max_len, device)
     # decode
     tokens = [sp.IdToPiece(i) for i in out_ids[1:]]  # exclude BOS
     # join and clean
+    import json
     text = sp.DecodePieces(tokens)
-    print(text)
+    try:
+        result = json.loads(text)
+        print(result)
+    except Exception:
+        print(text)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run inference on NL2Func Transformer")
@@ -77,7 +83,7 @@ if __name__ == '__main__':
                         help="Path to trained model checkpoint")
     parser.add_argument('--text', type=str, required=True,
                         help="Raw input text to convert")
-    parser.add_argument('--max_len', type=int, default=64,
+    parser.add_argument('--max_len', type=int, default=512,
                         help="Max output length (in tokens)")
     parser.add_argument('--nhead', type=int, default=4)
     parser.add_argument('--enc_layers', type=int, default=3)
