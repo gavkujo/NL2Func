@@ -1,17 +1,54 @@
+
 from dispatcher import Dispatcher
 from llm_main import LLMRouter
+import sys
+import os
+import json
+from infer import greedy_decode, MiniTransformer
+import torch
+import sentencepiece as spm
 
-# Dummy classifier for demonstration
 class Classifier:
+    def __init__(self):
+        # Load model and tokenizer once for efficiency
+        self.tokenizer_path = 'tokenizer/tokenizer.model'
+        self.model_path = 'saved/best_model.pt'
+        self.max_len = 512
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.sp = spm.SentencePieceProcessor()
+        self.sp.Load(self.tokenizer_path)
+        checkpoint = torch.load(self.model_path, map_location=self.device)
+        vocab_size = self.sp.GetPieceSize()
+        self.model = MiniTransformer(
+            vocab_size=vocab_size,
+            d_model=checkpoint['model_state'][list(checkpoint['model_state'].keys())[0]].shape[1],
+            nhead=4,
+            num_encoder_layers=3,
+            num_decoder_layers=3,
+            dim_feedforward=512,
+            dropout=0.1,
+            max_len=self.max_len,
+            pad_idx=self.sp.PieceToId('[PAD]')
+        ).to(self.device)
+        self.model.load_state_dict(checkpoint['model_state'])
+
     def classify(self, raw_query):
-        # Simple keyword-based classifier
-        if 'snapshot' in raw_query or 'Asaoka' in raw_query:
-            return 'Asaoka_data', 'Asaoka_data'
-        elif 'report' in raw_query or 'doc' in raw_query:
-            return 'reporter_Asaoka', 'reporter_Asaoka'
-        elif 'plot' in raw_query or 'graph' in raw_query:
-            return 'plot_combi_S', 'plot_combi_S'
-        else:
+        src_ids = [self.sp.PieceToId('[BOS]')] + self.sp.EncodeAsIds(raw_query) + [self.sp.PieceToId('[EOS]')]
+        src_ids = src_ids[:self.max_len]
+        out_ids = greedy_decode(self.model, src_ids, self.sp, self.max_len, self.device)
+        tokens = [self.sp.IdToPiece(i) for i in out_ids[1:]]  # exclude BOS
+        text = self.sp.DecodePieces(tokens)
+        try:
+            result = json.loads(text)
+            func_name = result.get('function', None)
+            if func_name:
+                print(f"[DEBUG] Classifier model output: {func_name}")
+                return func_name, func_name
+            else:
+                print(f"[DEBUG] Classifier model output: None")
+                return None, None
+        except Exception as e:
+            print(f"[ERROR] Classifier model failed to parse output: {text}")
             return None, None
 
 if __name__ == "__main__":
