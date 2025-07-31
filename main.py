@@ -37,19 +37,23 @@ class Classifier:
         src_ids = src_ids[:self.max_len]
         out_ids = greedy_decode(self.model, src_ids, self.sp, self.max_len, self.device)
         tokens = [self.sp.IdToPiece(i) for i in out_ids[1:]]  # exclude BOS
-        text = self.sp.DecodePieces(tokens)
+        text = self.sp.DecodePieces(tokens).strip()
+        KNOWN_FUNCTIONS = {"Asaoka_data", "reporter_Asaoka", "plot_combi_S"}
+        # Try JSON first
         try:
             result = json.loads(text)
             func_name = result.get('function', None)
             if func_name:
-                print(f"[DEBUG] Classifier model output: {func_name}")
+                print(f"[DEBUG] Classifier model output (JSON): {func_name}")
                 return func_name, func_name
-            else:
-                print(f"[DEBUG] Classifier model output: None")
-                return None, None
-        except Exception as e:
-            print(f"[ERROR] Classifier model failed to parse output: {text}")
-            return None, None
+        except Exception:
+            pass
+        # Fallback: treat plain text as function name if it matches known functions
+        if text in KNOWN_FUNCTIONS:
+            print(f"[DEBUG] Classifier model output (plain text): {text}")
+            return text, text
+        print(f"[ERROR] Classifier model failed to parse output: {text}")
+        return None, None
 
 if __name__ == "__main__":
     router = LLMRouter(max_turns=3)
