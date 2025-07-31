@@ -1,4 +1,5 @@
 import re
+from dispatcher import MissingSlot
 from dateparser import parse as date_parse
 
 # Plate regex, with your constraints (1-80 for plate number)
@@ -10,17 +11,16 @@ def find_plates(text):
 
 def normalize_date_input(date_str):
     """Parse user date input and convert to YYYY-MM-DD, retry until valid."""
-    while True:
-        dt = date_parse(date_str, settings={'PREFER_DATES_FROM': 'past'})
-        if dt:
-            return dt.date().isoformat()
-        else:
-            date_str = input("Invalid date format! Please enter date as YYYY-MM-DD or similar: ")
+    dt = date_parse(date_str, settings={'PREFER_DATES_FROM': 'past'})
+    if dt:
+        return dt.date().isoformat()
+    else:
+        return None
 
 def input_date_slot(slot_name):
     """Prompt user for date input and normalize it."""
-    user_input = input(f"Enter {slot_name} (date): ")
-    return normalize_date_input(user_input)
+    # Deprecated: input gathering moved to Dispatcher
+    pass
 
 def build_function_call(func_name, plates, dates):
     """Generate the final python function call string."""
@@ -52,8 +52,8 @@ def parse_and_build(user_text: str, func_name: str):
     """
     plates = find_plates(user_text)
     if not plates:
-        raise ValueError("No valid plates found in input.")
-    
+        raise MissingSlot('plates')
+
     needed_slots = {
         'Asaoka_data': ['SCD', 'ASD', 'max_date'],
         'reporter_Asaoka': ['SCD', 'ASD', 'max_date'],
@@ -63,11 +63,31 @@ def parse_and_build(user_text: str, func_name: str):
     if func_name not in needed_slots:
         raise ValueError(f"Function '{func_name}' not supported.")
 
+    # Try to extract dates from user_text
     dates = {}
     for slot in needed_slots[func_name]:
-        dates[slot] = input_date_slot(slot) #ask user
+        # Try to find slot value in user_text
+        import re
+        pattern = re.compile(rf"{slot}[:=]?\s*([\w\-/]+)", re.IGNORECASE)
+        match = pattern.search(user_text)
+        if match:
+            val = normalize_date_input(match.group(1))
+            if val:
+                dates[slot] = val
+            else:
+                raise MissingSlot(slot)
+        else:
+            raise MissingSlot(slot)
 
-    return build_function_call(func_name, plates, dates)
+    # Return params as dict for Dispatcher
+    if func_name == 'Asaoka_data':
+        return {'id': plates[0], 'SCD': dates['SCD'], 'ASD': dates['ASD'], 'max_date': dates['max_date']}
+    elif func_name == 'reporter_Asaoka':
+        return {'ids': plates, 'SCD': dates['SCD'], 'ASD': dates['ASD'], 'max_date': dates['max_date']}
+    elif func_name == 'plot_combi_S':
+        return {'ids': plates, 'max_date': dates['max_date']}
+    else:
+        raise ValueError(f"Function '{func_name}' not supported.")
 
 def main():
     user_text = input("Paste your command text: ")

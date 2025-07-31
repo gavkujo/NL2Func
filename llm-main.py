@@ -1,3 +1,9 @@
+# Function-specific guidelines/context mapping
+FUNCTION_GUIDELINES = {
+    "Asaoka_data": '''=== CONTEXT ===\nAsaoka assessment: Use the Asaoka method to determine degree of consolidation (DOC) for settlement plates. DOC > 90% is compliant. Provide summary table of DOC, latest settlement, GL, and holding period.''',
+    "reporter_Asaoka": '''=== CONTEXT ===\nReporter: Generate a detailed report for settlement plates, including DOC, settlement, GL, and compliance status. Highlight any non-compliant plates.''',
+    "plot_combi_S": '''=== CONTEXT ===\nPlotting: Create combined plots for selected settlement plates up to the specified max date. Include summary statistics and highlight trends in settlement.''',
+}
 #!/usr/bin/env python3
 import requests
 import json
@@ -40,18 +46,34 @@ def get_summary(text):
     return summary
 
 # Build full message list
-def build_messages(system, memory, user_input):
-    messages = system.copy()
-    if "@recap" in user_input:
-        # Append memory as a system-style recap block
-        if memory:
-            recap = "=== PREVIOUS CONVERSATION ===\n"
-            for i, (user_msg, assistant_msg) in enumerate(memory, 1):
-                recap += f"User ({i}): {user_msg.strip()}\n"
-                recap += f"Assistant ({i}): {assistant_msg.strip()}\n"
-            messages.append({"role": "system", "content": recap.strip()})
+def build_messages(system, memory, user_input, classifier_data=None, func_guidelines=None, func_output=None):
+    messages = []
+    # Always add the common instructions
+    messages.append(system[0])
+    # Add function-specific context/guidelines
+    if func_guidelines:
+        messages.append({"role": "system", "content": func_guidelines})
+    else:
+        messages.append(system[1])  # fallback to default context/guidelines
 
-    # Now add the current user input
+    # Add function execution/classifier info if present
+    if classifier_data or func_output:
+        block = ""
+        if classifier_data:
+            block += f"Function: {classifier_data.get('Function')}\nParams: {classifier_data.get('Params')}\n"
+        if func_output:
+            block += f"Output: {func_output}\n"
+        messages.append({"role": "system", "content": block.strip()})
+
+    # Add recap if requested
+    if "@recap" in user_input and memory:
+        recap = "=== PREVIOUS CONVERSATION ===\n"
+        for i, (user_msg, assistant_msg) in enumerate(memory, 1):
+            recap += f"User ({i}): {user_msg.strip()}\n"
+            recap += f"Assistant ({i}): {assistant_msg.strip()}\n"
+        messages.append({"role": "system", "content": recap.strip()})
+
+    # Always add the user query last
     messages.append({"role": "user", "content": "\n === USER QUERY ===\n" + user_input})
     return messages
 
@@ -138,29 +160,15 @@ class LLMRouter:
                 * Settlement plates are named in a format similar to 'F3-R03a-SM-04' where 'F3' Indicates it belongs to the project, R03a is a specific area within the project, 'SM' indicates it is a Settlement Plates and the last two digits is the plate's index number. Do not comment on these names as they are fixed and require no interpretation.
                 * The Settlement Plates are crucial for completion of Soil Improvement Works, where the settlement measurements have to meet certain criteria prior to being approved for removal.
                 * The criteria is Asaoka DOC greater than 90%, a ground level above 16.9mCD and rate of settlement less than 4mm.
-
-                === GUIDELINES ===
-                
-                When assessing the overview for Settlement Plates, note the following:
-                * A settlement plate measures the ground settlement in millimetres (mm) where a larger negative value means more settlement from a baseline elevation. This settlement is a result of consolidation, where the soil improves under a surcharge load.
-                * The settlement plate has a standard naming format like 'F3-R03a-SM-01', where 'R03a' denotes a region within the project, 'SM' means Settlement plate and '01 denotes which Settlement Plate is being referred to. The last two digits are an index number. Do not comment on these names as they are fixed.
-                * Settlement is expected to vary from Settlement Plate to Settlement Plate as the soil layering under each Settlement Plate is unique, and may behave differently even under the same ground level.
-                * Surcharge load is a certain thickness of sand which weighs the ground down, thereby causing settlement and improvement of the underlying soil's properties.
-                * The "Latest_GL" is the last reported ground elevation in units 'mCD'. A larger number indicates the particular plate is loaded more, and hence should record more settlement.
-                * Each Settlement Plate is surcharged on a particular date known as the "Surcharge_Complete_Date" which indicates the date from when the major of the settlement occurs.
-                * The Holding_period is the period of time in days, between the "Surcharge_Complete_Date" and "Latest_Date" when the settlement was last reported. A longer 'Holding_Period' usually means that the settlement has had time to taper off. Shorter periods may result in more ongoing settlement.
-                * The "Asaoka_DOC" denotes the Degree of Consolidation (DOC) based on the Asaoka Assessment method. It is a measure in units %, of by how much the ground has consolidated. A DOC of 100 % means no more settlement is expected, while a DOC between 90 % and 100 % means the settlement is tapering and a DOC less than 90% indicate on-going settlement. DOC less than 90 % non-compliant to the requirements.
-                * The 'Latest_GL' should be a minimum 16.9mCD to be compliant with Port specifications.
-                * When asked for a summary or overview, make sure to provide the Settlement Plate ID, along with the respective "latest_Settlement", "Latest_GL", "Latest_Date", "Asaoka_DOC", "Holding_period" which is what users are interested in. You do not need to comment on the format of the Settlement Plate ID as this is just a reference identifier.
-                * When asked for a summary or overview of the Settlement Plate data, provide a table at the end of your response.'''
-            )}
+            ''')}
         ]
 
         # Warm up default model
         #warmup_model(MODEL_CONFIG["text"])
         self.warmed_up_models.add(MODEL_CONFIG["text"])
 
-    def handle_user(self, user_input: str):
+
+    def handle_user(self, user_input: str, func_name=None, classifier_data=None, func_output=None):
         cleaned_input = strip_think(user_input)
         model = select_model(cleaned_input)
 
@@ -169,7 +177,16 @@ class LLMRouter:
             #warmup_model(model)
             self.warmed_up_models.add(model)
 
-        messages = build_messages(self.system_messages, self.memory, cleaned_input)
+        # Select function-specific guidelines/context
+        func_guidelines = FUNCTION_GUIDELINES.get(func_name)
+        messages = build_messages(
+            self.system_messages,
+            self.memory,
+            cleaned_input,
+            classifier_data=classifier_data,
+            func_guidelines=func_guidelines,
+            func_output=func_output
+        )
         print(f"[Debug] Selected model: {model}")
         print(f"[Debug] Message count as a json: {len(messages)}")
         print(f"[Debug] Full message length as a string: {len(str(messages))}")
@@ -195,79 +212,14 @@ class LLMRouter:
         self.memory.append((cleaned_input, summary))
         self.memory = self.memory[-self.max_turns:]
         return response
+    
+
 
 # ======= Run ========
 if __name__ == "__main__":
     router = LLMRouter(max_turns=3)
 
-    combined = '''
-@analysis Please give me an descriptive full analysis of all the given settlement plates, finish by a tabular summary of all plates. Dont think too much, all guidelines are provided:
-
-  "F3-R11a-SM-01": {
-    "Surcharge_Complete_date": "2025-04-24",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.617",
-    "Latest_GL": "20.77",
-    "Asaoka_DOC": "100",
-    "Holding_period": "89"
-  },
-  "F3-R11a-SM-02": {
-    "Surcharge_Complete_date": "2025-04-26",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.136",
-    "Latest_GL": "23.22",
-    "Asaoka_DOC": "100",
-    "Holding_period": "87"
-  },
-  "F3-R11a-SM-03": {
-    "Surcharge_Complete_date": "2025-04-24",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.133",
-    "Latest_GL": "23.32",
-    "Asaoka_DOC": "100",
-    "Holding_period": "89"
-  },
-  "F3-R11a-SM-04": {
-    "Surcharge_Complete_date": "2025-04-24",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.658",
-    "Latest_GL": "23.29",
-    "Asaoka_DOC": "100",
-    "Holding_period": "89"
-  },
-  "F3-R11a-SM-05": {
-    "Surcharge_Complete_date": "2025-04-24",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.225",
-    "Latest_GL": "23.31",
-    "Asaoka_DOC": "100",
-    "Holding_period": "89"
-  },
-  "F3-R11a-SM-06": {
-    "Surcharge_Complete_date": "2025-04-24",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.303",
-    "Latest_GL": "23.22",
-    "Asaoka_DOC": "100",
-    "Holding_period": "89"
-  },
-  "F3-R11a-SM-07": {
-    "Surcharge_Complete_date": "2025-04-26",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.137",
-    "Latest_GL": "23.27",
-    "Asaoka_DOC": "100",
-    "Holding_period": "87"
-  },
-  "F3-R11a-SM-08": {
-    "Surcharge_Complete_date": "2025-04-26",
-    "Datetime": "2025-07-22",
-    "latest_Settlement": "-2.518",
-    "Latest_GL": "23.14",
-    "Asaoka_DOC": "100",
-    "Holding_period": "87"
-  }
-'''
+    combined = ''' prompt '''
     router.handle_user(combined)
 
     while True:
