@@ -66,21 +66,137 @@ def parse_and_build(user_text: str, func_name: str):
     if func_name not in needed_slots:
         raise ValueError(f"Function '{func_name}' not supported.")
 
-    # Try to extract dates from user_text
+    # Enhanced date extraction
     dates = {}
+    date_patterns = [
+        r"(\d{2})[\-/](\d{2})[\-/](\d{4})",         # DD-MM-YYYY or DD/MM/YYYY
+        r"(\d{4})[\-/](\d{2})[\-/](\d{2})",         # YYYY-MM-DD or YYYY/MM/DD
+        r"(\d{2})[\-/](\d{2})",                      # DD-MM or DD/MM (no year)
+        r"([A-Za-z]+)\s+(\d{2,4})",                   # Month Year (Aug 24, August 2024)
+        r"(\d{2})\s+([A-Za-z]+)\s*(\d{4})?",        # Date Month [Year] (16 Aug, 16 August 2024)
+        r"([A-Za-z]+)\s+(\d{2})",                     # Month Date (Aug 16)
+        r"(\d{2})\s+([A-Za-z]+)"                      # Date Month (16 Aug)
+    ]
+    # Helper to parse and normalize
+    def extract_date(raw):
+        raw = raw.strip()
+        for pat in date_patterns:
+            m = re.search(pat, raw)
+            if m:
+                # DD-MM-YYYY
+                if pat == date_patterns[0]:
+                    d, mth, y = m.groups()
+                    return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
+                # YYYY-MM-DD
+                elif pat == date_patterns[1]:
+                    y, mth, d = m.groups()
+                    return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
+                # DD-MM (no year)
+                elif pat == date_patterns[2]:
+                    d, mth = m.groups()
+                    return f"2025-{mth.zfill(2)}-{d.zfill(2)}"
+                # Month Year
+                elif pat == date_patterns[3]:
+                    month, year = m.groups()
+                    try:
+                        mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
+                    except:
+                        mth = '01'
+                    y = year if len(year) == 4 else f"20{year[-2:]}"
+                    return f"{y}-{mth}-01"
+                # Date Month Year
+                elif pat == date_patterns[4]:
+                    d, month, y = m.groups()
+                    try:
+                        mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
+                    except:
+                        mth = '01'
+                    if y:
+                        year = y if len(y) == 4 else f"20{y[-2:]}"
+                    else:
+                        year = "2025"
+                    return f"{year}-{mth}-{d.zfill(2)}"
+                # Month Date
+                elif pat == date_patterns[5]:
+                    month, d = m.groups()
+                    try:
+                        mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
+                    except:
+                        mth = '01'
+                    return f"2025-{mth}-{d.zfill(2)}"
+                # Date Month
+                elif pat == date_patterns[6]:
+                    d, month = m.groups()
+                    try:
+                        mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
+                    except:
+                        mth = '01'
+                    return f"2025-{mth}-{d.zfill(2)}"
+        # fallback to dateparser
+        val = normalize_date_input(raw)
+        if val:
+            return val
+        return None
+
+    # Extract all slots
+    slot_raws = {}
     for slot in needed_slots[func_name]:
         # Try to find slot value in user_text
-        import re
-        pattern = re.compile(rf"{slot}[:=]?\s*([\w\-/]+)", re.IGNORECASE)
+        pattern = re.compile(rf"{slot}[:=]?\s*([\w\-/ ]+)", re.IGNORECASE)
         match = pattern.search(user_text)
         if match:
-            val = normalize_date_input(match.group(1))
-            if val:
-                dates[slot] = val
-            else:
-                raise MissingSlot(slot)
+            slot_raws[slot] = match.group(1)
         else:
-            raise MissingSlot(slot)
+            slot_raws[slot] = None
+
+    # Pass 1: extract dates
+    for slot in needed_slots[func_name]:
+        raw = slot_raws[slot]
+        val = extract_date(raw) if raw else None
+        if val:
+            dates[slot] = val
+        else:
+            dates[slot] = None
+
+    # Pass 2: fill missing years for asaoka_data and reporter_Asaoka
+    if func_name in ['Asaoka_data', 'reporter_Asaoka']:
+        # Get years
+        def get_year(date):
+            if date and len(date) == 10:
+                return date[:4]
+            return None
+        scd_year = get_year(dates.get('SCD'))
+        asd_year = get_year(dates.get('ASD'))
+        max_year = get_year(dates.get('max_date'))
+        # Fill missing years
+        for slot in ['SCD', 'ASD', 'max_date']:
+            date = dates.get(slot)
+            if date and date.startswith('2025-'):
+                # If year is default, try to fill from SCD/ASD/max_date
+                if slot == 'SCD' and scd_year:
+                    dates['SCD'] = dates['SCD'].replace('2025', scd_year)
+                elif slot == 'ASD' and asd_year:
+                    dates['ASD'] = dates['ASD'].replace('2025', asd_year)
+                elif slot == 'max_date' and max_year:
+                    dates['max_date'] = dates['max_date'].replace('2025', max_year)
+        # If still missing, propagate year from SCD, then ASD, then max_date
+        for slot in ['SCD', 'ASD', 'max_date']:
+            date = dates.get(slot)
+            if date and date.startswith('2025-'):
+                fill_year = scd_year or asd_year or max_year or '2025'
+                dates[slot] = date.replace('2025', fill_year)
+        # Bump max_date year if it's behind SCD/ASD
+        try:
+            from datetime import datetime
+            scd_dt = datetime.strptime(dates['SCD'], '%Y-%m-%d') if dates['SCD'] else None
+            asd_dt = datetime.strptime(dates['ASD'], '%Y-%m-%d') if dates['ASD'] else None
+            max_dt = datetime.strptime(dates['max_date'], '%Y-%m-%d') if dates['max_date'] else None
+            if max_dt and ((scd_dt and max_dt < scd_dt) or (asd_dt and max_dt < asd_dt)):
+                # bump year
+                bumped = max_dt.replace(year=max([d.year for d in [scd_dt, asd_dt] if d])+1)
+                dates['max_date'] = bumped.strftime('%Y-%m-%d')
+        except Exception:
+            pass
 
     # Return params as dict for Dispatcher
     if func_name == 'Asaoka_data':
