@@ -1,9 +1,7 @@
-from data.parser_test import parse_and_build  # refactored for pure parsing!
+from data.parser_test import parse_and_build, MissingSlot  # refactored for pure parsing!
 from llm_main import LLMRouter
 import functions
 
-class MissingSlot(Exception):
-    def __init__(self, slot): self.slot = slot
 
 class Dispatcher:
     def __init__(self, classifier, llm_router):

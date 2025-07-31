@@ -1,9 +1,12 @@
 import re
-from dispatcher import MissingSlot
 from dateparser import parse as date_parse
 
 # Plate regex, with your constraints (1-80 for plate number)
 PLATE_REGEX = r'F3\-R\d{2}[a-z]{1}\-SM\-(?:[0-9][0-9]?|80)'
+
+class MissingSlot(Exception):
+    def __init__(self, slot):
+        self.slot = slot
 
 def find_plates(text):
     """Extract plate IDs as list."""
