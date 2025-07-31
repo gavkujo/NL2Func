@@ -82,9 +82,9 @@ if __name__ == '__main__':
                         help="Path to JSON dataset")
     parser.add_argument('--prefix', type=str, default='tokenizer/tokenizer',
                         help="Prefix for output model files")
-    parser.add_argument('--vocab_size', type=int, default=82,
+    parser.add_argument('--vocab_size', type=int, default=1000,
                         help="Vocabulary size")
-    parser.add_argument('--model_type', type=str, default='char',
+    parser.add_argument('--model_type', type=str, default='bpe',
                         choices=['unigram', 'bpe', 'word', 'char'],
                         help="Type of SentencePiece model")
     args = parser.parse_args()

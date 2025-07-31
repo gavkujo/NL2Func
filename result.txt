@@ -1,0 +1,105 @@
+user_input → classifier.classify() → decide func or None  
+             ↓  
+       extract params (or ask follow-ups)  
+             ↓  
+      run func (if any) + capture its output  
+             ↓  
+      format everything into your llm.py prompt schema  
+             ↓  
+    call router.handle_user(formatted_prompt) 
+
+
+1. **Define a `Dispatcher` Module**
+
+   * Create a `dispatcher.py` with a `Dispatcher` (or `LLMOrchestrator`) class.
+   * Give it methods:
+
+     * `classify(raw_query)`
+     * `gather_params(raw_query, func_name)`
+     * `run_function(func, params)`
+     * `build_and_send(raw_query, func_name, params, func_output)`
+
+2. **Extract Pure Parsing Logic**
+
+   * Refactor your existing `parse_and_build` so it:
+
+     * Never calls `input()` itself.
+     * Either **returns** a `dict` of `params` or **raises** a custom `MissingSlot(slot_name)` error.
+
+3. **Implement the Interactive Loop in Dispatcher**
+
+   * Inside `Dispatcher.gather_params()`:
+
+     1. Keep a local `aux_ctx = raw_query` and an empty `collected = {}`.
+     2. `while True`:
+
+        * Try `params = pure_parse(aux_ctx, func_name)`
+        * On success, `return params`
+        * On `MissingSlot(slot)`:
+
+          * `answer = input(f"What’s your {slot}? ")`
+          * `collected[slot] = answer`
+          * `aux_ctx += f"\n{slot}: {answer}"`
+
+4. **Keep `raw_query` Untouched**
+
+   * Always pass the **original** user text to the LLM prompt.
+   * Never append your slot Q\&A chatter to it.
+
+5. **Build a Unified Prompt Builder**
+
+   * In `llm.py`, factor out `build_full_prompt(user_input, classifier_data, general_guidelines, func_guidelines, other_context)` that returns the **list of messages** for `handle_user()`.
+   * Inject:
+
+     * **User Query** → the raw text
+     * **Classifier Block** → `"Function: …\nParams: …\nOutput: …"`
+     * **System Context & Guidelines** → your existing blobs
+     * **Recap** (if flagged)
+
+6. **Hook Up Classifier → Dispatcher → LLMRouter**
+
+   * In your `main.py` (or wherever you drive it):
+
+     ```python
+     disp = Dispatcher(classifier, llm_router)
+     while True:
+         raw = input(">> ")
+         func_name, func = classifier.classify(raw)
+         if func:
+             params = disp.gather_params(raw, func_name)
+             out = disp.run_function(func, params)
+         else:
+             params, out = {}, None
+         disp.build_and_send(raw, func_name, params, out)
+     ```
+
+7. **Centralize Guidelines Storage**
+
+   * Move function-specific guideline text out of `llm.py` into a small YAML/JSON (e.g. `guidelines.yml`) keyed by function name.
+   * Let `Dispatcher` or `build_full_prompt` load the right snippet.
+
+8. **Error Handling & UX Polish**
+
+   * Catch unexpected errors in `Dispatcher.gather_params` and ask a clarifying question or bail gracefully.
+   * If user types “skip” or “never mind” during param prompts, break out and send only the raw query to LLM (no function).
+
+9. **Logging & Testing**
+
+   * Add debug logs at each step: classification result, missing-slot, collected params, final prompt.
+   * Write unit tests for:
+
+     * pure parsing returns params or MissingSlot
+     * dispatcher gathers slots correctly
+     * prompt builder output contains exactly the pieces you want
+
+10. **Smoke-Test End-to-End**
+
+    * Simulate:
+
+      * A matched function flow: raw → params Q\&A → func result → LLM prompt.
+      * A no-function flow: raw → LLM prompt only.
+    * Verify the LLM call sees only the **raw user text + your structured metadata**, never the Q\&A chatter.
+
+---
+
+Once you tick off these, you’ll have a **modular**, **testable**, and **chatty-UI/noise-free-LLM** pipeline. Go flex that code and let me know if you want code snippets for any of these steps! ✨🚀

@@ -204,7 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='data/full_dataset.json')
     parser.add_argument('--tokenizer', type=str, default='tokenizer/tokenizer')
     parser.add_argument('--save_dir', type=str, default='saved')
-    parser.add_argument('--vocab_size', type=int, default=82)
+    parser.add_argument('--vocab_size', type=int, default=1000)
     parser.add_argument('--max_len', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=5)

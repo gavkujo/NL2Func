@@ -4,6 +4,7 @@ import torch
 import sentencepiece as spm
 import argparse
 from models.transformer import MiniTransformer
+from data.parser_test import parse_and_build as pb
 
 def greedy_decode(model, src_ids, sp, max_len, device):
     model.eval()
@@ -71,9 +72,12 @@ def infer(args):
     text = sp.DecodePieces(tokens)
     try:
         result = json.loads(text)
-        print(result)
+        print("result: ", result)
     except Exception:
         print(text)
+
+    print(pb(raw,text))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run inference on NL2Func Transformer")
@@ -92,3 +96,5 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.1)
     args = parser.parse_args()
     infer(args)
+
+
