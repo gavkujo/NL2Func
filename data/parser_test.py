@@ -136,17 +136,30 @@ def parse_and_build(user_text: str, func_name: str):
 
     # Only extract plates, always raise MissingSlot for date slots
     dates = {}
+    # Try to extract slot answers from user_text (for interactive loop)
     for slot in needed_slots[func_name]:
-        if slot != 'id' and slot not in dates:
+        if slot == 'id':
+            continue
+        # Look for slot value in user_text (format: slot: value)
+        import re
+        match = re.search(rf"{slot}\s*[:=]\s*(.+)", user_text, re.IGNORECASE)
+        if match:
+            val = match.group(1).strip()
+            norm = normalize_date_input(val)
+            if norm:
+                dates[slot] = norm
+            else:
+                raise MissingSlot(slot)
+        else:
             raise MissingSlot(slot)
 
     # Return params as dict for Dispatcher
     if func_name == 'Asaoka_data':
-        return {'id': plates[0], 'SCD': None, 'ASD': None, 'max_date': None}
+        return {'id': plates[0], 'SCD': dates.get('SCD'), 'ASD': dates.get('ASD'), 'max_date': dates.get('max_date')}
     elif func_name == 'reporter_Asaoka':
-        return {'ids': plates, 'SCD': None, 'ASD': None, 'max_date': None}
+        return {'ids': plates, 'SCD': dates.get('SCD'), 'ASD': dates.get('ASD'), 'max_date': dates.get('max_date')}
     elif func_name == 'plot_combi_S':
-        return {'ids': plates, 'max_date': None}
+        return {'ids': plates, 'max_date': dates.get('max_date')}
     else:
         raise ValueError(f"Function '{func_name}' not supported.")
 
