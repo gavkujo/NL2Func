@@ -12,77 +12,80 @@ def find_plates(text):
     """Extract plate IDs as list."""
     return re.findall(PLATE_REGEX, text)
 
+# a helper month→num map to keep things clean
+MONTH_MAP = {
+    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+    'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+    'sep': '09', 'sept': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+}
+
 def normalize_date_input(date_str):
     """Parse user date input and convert to YYYY-MM-DD, retry until valid."""
-    # Enhanced regex-based parsing
-    date_patterns = [
-        r"(\d{2})[\-/](\d{2})[\-/](\d{4})",         # DD-MM-YYYY or DD/MM/YYYY
-        r"(\d{4})[\-/](\d{2})[\-/](\d{2})",         # YYYY-MM-DD or YYYY/MM/DD
-        r"(\d{2})[\-/](\d{2})",                      # DD-MM or DD/MM (no year)
-        r"([A-Za-z]+)\s+(\d{2,4})",                   # Month Year (Aug 24, August 2024)
-        r"(\d{2})\s+([A-Za-z]+)\s*(\d{4})?",        # Date Month [Year] (16 Aug, 16 August 2024)
-        r"([A-Za-z]+)\s+(\d{2})",                     # Month Date (Aug 16)
-        r"(\d{2})\s+([A-Za-z]+)"                      # Date Month (16 Aug)
-    ]
     date_str = date_str.strip()
+    date_patterns = [
+        r"(\d{2})[\-/](\d{2})[\-/](\d{4})",        # DD-MM-YYYY or DD/MM/YYYY
+        r"(\d{4})[\-/](\d{2})[\-/](\d{2})",        # YYYY-MM-DD or YYYY/MM/DD
+        r"(\d{2})[\-/](\d{2})",                    # DD-MM or DD/MM (no year)
+        # **Move DD Month [Year] *before* Month Year!**
+        r"(\d{1,2})\s+([A-Za-z]+)\s*(\d{4})?",     # 16 Aug OR 16 Aug 2024
+        r"([A-Za-z]+)\s+(\d{2,4})",                # Aug 24 or August 2024
+        r"([A-Za-z]+)\s+(\d{1,2})",                # Aug 16
+        r"(\d{1,2})\s+([A-Za-z]+)"                 # 16 August
+    ]
+
     for pat in date_patterns:
         m = re.search(pat, date_str)
-        if m:
-            # DD-MM-YYYY
-            if pat == date_patterns[0]:
-                d, mth, y = m.groups()
-                return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
-            # YYYY-MM-DD
-            elif pat == date_patterns[1]:
-                y, mth, d = m.groups()
-                return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
-            # DD-MM (no year)
-            elif pat == date_patterns[2]:
-                d, mth = m.groups()
-                return f"2025-{mth.zfill(2)}-{d.zfill(2)}"
-            # Month Year
-            elif pat == date_patterns[3]:
-                month, year = m.groups()
-                try:
-                    mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
-                except:
-                    mth = '01'
-                y = year if len(year) == 4 else f"20{year[-2:]}"
-                return f"{y}-{mth}-01"
-            # Date Month Year
-            elif pat == date_patterns[4]:
-                d, month, y = m.groups()
-                try:
-                    mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
-                except:
-                    mth = '01'
-                if y:
-                    year = y if len(y) == 4 else f"20{y[-2:]}"
-                else:
-                    year = "2025"
-                return f"{year}-{mth}-{d.zfill(2)}"
-            # Month Date
-            elif pat == date_patterns[5]:
-                month, d = m.groups()
-                try:
-                    mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
-                except:
-                    mth = '01'
-                return f"2025-{mth}-{d.zfill(2)}"
-            # Date Month
-            elif pat == date_patterns[6]:
-                d, month = m.groups()
-                try:
-                    mth = str(list(reversed([i for i in range(1,13) if month.lower().startswith(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'][i-1])]))[0]).zfill(2)
-                except:
-                    mth = '01'
-                return f"2025-{mth}-{d.zfill(2)}"
-    # fallback to dateparser
+        if not m:
+            continue
+
+        # 1) DD-MM-YYYY
+        if pat == date_patterns[0]:
+            d, mth, y = m.groups()
+            return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
+
+        # 2) YYYY-MM-DD
+        if pat == date_patterns[1]:
+            y, mth, d = m.groups()
+            return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
+
+        # 3) DD-MM (no year → assume current year)
+        if pat == date_patterns[2]:
+            d, mth = m.groups()
+            return f"2025-{mth.zfill(2)}-{d.zfill(2)}"
+
+        # 4) DD Month [Year]
+        if pat == date_patterns[3]:
+            d, month, y = m.groups()
+            mon = month.lower()[:3]
+            mnum = MONTH_MAP.get(mon, '01')
+            year = y if y and len(y)==4 else '2025'
+            return f"{year}-{mnum}-{d.zfill(2)}"
+
+        # 5) Month Year
+        if pat == date_patterns[4]:
+            month, year = m.groups()
+            mon = month.lower()[:3]
+            mnum = MONTH_MAP.get(mon, '01')
+            y = year if len(year)==4 else f"20{year[-2:]}"
+            return f"{y}-{mnum}-01"
+
+        # 6) Month DD
+        if pat == date_patterns[5]:
+            month, d = m.groups()
+            mon = month.lower()[:3]
+            mnum = MONTH_MAP.get(mon, '01')
+            return f"2025-{mnum}-{d.zfill(2)}"
+
+        # 7) DD Month
+        if pat == date_patterns[6]:
+            d, month = m.groups()
+            mon = month.lower()[:3]
+            mnum = MONTH_MAP.get(mon, '01')
+            return f"2025-{mnum}-{d.zfill(2)}"
+
+    # fallback to dateparser for the wild ones
     dt = date_parse(date_str, settings={'PREFER_DATES_FROM': 'past'})
-    if dt:
-        return dt.date().isoformat()
-    else:
-        return None
+    return dt.date().isoformat() if dt else None
 
 def input_date_slot(slot_name):
     """Prompt user for date input and normalize it."""
