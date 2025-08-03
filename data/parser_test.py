@@ -186,18 +186,25 @@ def parse_and_build(user_text: str, func_name: str):
     # Only check for slot values in the slot-filling context (never extract from original user input)
     slot_values = {}
     for slot in needed_slots[func_name]:
-        # Look for a line like 'SCD: ...' (case-insensitive)
         found = False
         for sline in slot_lines:
             m = re.match(rf'^{slot}:\s*(.+)$', sline.strip(), re.IGNORECASE)
             if m:
-                slot_values[slot] = m.group(1).strip()
+                val = m.group(1).strip()
+                # Normalize date for date slots
+                if slot in ['SCD', 'ASD', 'max_date']:
+                    norm = normalize_date_input(val)
+                    if not norm:
+                        raise MissingSlot(slot)  # Will re-prompt if invalid
+                    slot_values[slot] = norm
+                else:
+                    slot_values[slot] = val
                 found = True
                 break
         if not found:
             raise MissingSlot(slot)
 
-    # Return params dict with extracted values
+    # Return params dict with normalized date values
     if func_name == 'Asaoka_data':
         return {'id': plates[0], 'SCD': slot_values['SCD'], 'ASD': slot_values['ASD'], 'max_date': slot_values['max_date']}
     elif func_name == 'reporter_Asaoka':
