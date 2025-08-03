@@ -152,7 +152,25 @@ def parse_and_build(user_text: str, func_name: str):
     Raises:
         ValueError if required plates or dates are missing or invalid.
     """
-    plates = find_plates(user_text)
+    # Only extract plates from the original user input (not slot-filling context)
+    # The dispatcher always appends slot-filling lines as '\nSCD: ...', etc.
+    # So, split user_text into two parts: the original prompt, and any appended slot-filling lines
+    # We'll treat the first paragraph as the original user input, and any lines matching 'slot: value' as slot-filling context
+    # (This is robust because the dispatcher always appends in this format)
+
+    # Split lines
+    lines = user_text.splitlines()
+    # The original user input is always the first line (or block before any slot-filling lines)
+    orig_lines = []
+    slot_lines = []
+    for line in lines:
+        if re.match(r'^(SCD|ASD|max_date):', line.strip(), re.IGNORECASE):
+            slot_lines.append(line)
+        else:
+            orig_lines.append(line)
+    orig_text = '\n'.join(orig_lines)
+
+    plates = find_plates(orig_text)
     if not plates:
         raise MissingSlot('plates')
 
@@ -165,18 +183,27 @@ def parse_and_build(user_text: str, func_name: str):
     if func_name not in needed_slots:
         raise ValueError(f"Function '{func_name}' not supported.")
 
-    # Always raise MissingSlot for each date slot (interactive only)
+    # Only check for slot values in the slot-filling context (never extract from original user input)
+    slot_values = {}
     for slot in needed_slots[func_name]:
-        if slot != 'id':
+        # Look for a line like 'SCD: ...' (case-insensitive)
+        found = False
+        for sline in slot_lines:
+            m = re.match(rf'^{slot}:\s*(.+)$', sline.strip(), re.IGNORECASE)
+            if m:
+                slot_values[slot] = m.group(1).strip()
+                found = True
+                break
+        if not found:
             raise MissingSlot(slot)
 
-    # Should never reach here, but return with None for all date slots for completeness
+    # Return params dict with extracted values
     if func_name == 'Asaoka_data':
-        return {'id': plates[0], 'SCD': None, 'ASD': None, 'max_date': None}
+        return {'id': plates[0], 'SCD': slot_values['SCD'], 'ASD': slot_values['ASD'], 'max_date': slot_values['max_date']}
     elif func_name == 'reporter_Asaoka':
-        return {'ids': plates, 'SCD': None, 'ASD': None, 'max_date': None}
+        return {'ids': plates, 'SCD': slot_values['SCD'], 'ASD': slot_values['ASD'], 'max_date': slot_values['max_date']}
     elif func_name == 'plot_combi_S':
-        return {'ids': plates, 'max_date': None}
+        return {'ids': plates, 'max_date': slot_values['max_date']}
     else:
         raise ValueError(f"Function '{func_name}' not supported.")
 def main_test_examples():
