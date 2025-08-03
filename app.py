@@ -40,7 +40,7 @@ def add_message(role, msg):
 def process_user_message(user_msg):
     add_message("user", user_msg)
     st.session_state["_pending_user_input"] = user_msg
-    st.experimental_rerun()
+    st.rerun()
 
 
 # --- LLM Streaming Helper ---
