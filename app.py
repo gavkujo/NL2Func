@@ -44,7 +44,10 @@ def process_user_message(user_msg):
         return
     st.session_state["last_user_input"] = user_msg
 
+
     add_message("user", user_msg)
+    # Immediately display the user message so it appears before the LLM response
+    display_chat()
 
     # If in slot-filling mode
     if st.session_state.slot_state:
