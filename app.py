@@ -33,21 +33,16 @@ def display_chat():
 
 def add_message(role, msg):
     st.session_state.chat_history.append((role, msg))
-    # Only update UI if not streaming (streaming handled separately)
-    if not callable(msg):
-        # Only display chat if not in the middle of a Streamlit rerun (prevents duplicate rendering)
-        if st.session_state.get("_suppress_display", False):
-            return
-        display_chat()
+    # Do not call display_chat() here; only call it once at the end of the script
 
 # --- Main Chat Logic ---
 
 def process_user_message(user_msg):
     disp = st.session_state.dispatcher
-    # Prevent duplicate chat history on rerun
-    if st.session_state.get("_processing", False):
+    # Only process if this is a new user input
+    if "last_user_input" in st.session_state and st.session_state["last_user_input"] == user_msg:
         return
-    st.session_state["_processing"] = True
+    st.session_state["last_user_input"] = user_msg
 
     add_message("user", user_msg)
 
@@ -60,7 +55,6 @@ def process_user_message(user_msg):
             add_message("assistant", "Okay, skipping function. Sending your query to the LLM.")
             st.session_state.slot_state = None
             stream_llm_response(disp.llm_router, slot_state["orig_query"])
-            st.session_state["_processing"] = False
             return
         # Append slot answer to aux_ctx
         slot_state["aux_ctx"] += f"\n{slot}: {answer}"
@@ -76,7 +70,6 @@ def process_user_message(user_msg):
             else:
                 add_message("assistant", f"Error: {e}")
                 st.session_state.slot_state = None
-        st.session_state["_processing"] = False
         return
 
     func_name, func = disp.classify(user_msg)
@@ -97,10 +90,8 @@ def process_user_message(user_msg):
                 add_message("assistant", f"What's your {e.slot}?")
             else:
                 add_message("assistant", f"Error: {e}")
-        st.session_state["_processing"] = False
     else:
         stream_llm_response(disp.llm_router, user_msg)
-        st.session_state["_processing"] = False
 
 
 # --- LLM Streaming Helper ---
