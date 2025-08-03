@@ -123,7 +123,7 @@ def stream_llm_response(llm_router, user_input, func_name=None, params=None, fun
 
 # --- UI ---
 
-display_chat()
 user_input = st.chat_input("Type your message and press Enter...")
 if user_input:
     process_user_message(user_input)
+display_chat()
