@@ -53,18 +53,14 @@ def process_user_message(user_msg):
         if answer.lower() in ["skip", "never mind"]:
             add_message("assistant", "Okay, skipping function. Sending your query to the LLM.")
             st.session_state.slot_state = None
-            # Stream LLM response
             stream_llm_response(disp.llm_router, slot_state["orig_query"])
             return
         # Append slot answer to aux_ctx
         slot_state["aux_ctx"] += f"\n{slot}: {answer}"
         try:
             params = disp.pure_parse(slot_state["aux_ctx"], slot_state["func_name"])
-            # All slots filled!
-            add_message("assistant", f"All parameters collected: {params}")
+            # All slots filled! Run function and send to LLM
             out = disp.run_function(slot_state["func_name"], params)
-            add_message("assistant", f"Function output: {out}")
-            # Stream LLM response
             stream_llm_response(disp.llm_router, slot_state["orig_query"], slot_state["func_name"], params, out)
             st.session_state.slot_state = None
         except Exception as e:
@@ -81,9 +77,8 @@ def process_user_message(user_msg):
     if func_name:
         try:
             params = disp.pure_parse(user_msg, func_name)
-            add_message("assistant", f"All parameters collected: {params}")
+            # All slots filled! Run function and send to LLM
             out = disp.run_function(func_name, params)
-            add_message("assistant", f"Function output: {out}")
             stream_llm_response(disp.llm_router, user_msg, func_name, params, out)
         except Exception as e:
             if hasattr(e, "slot"):
