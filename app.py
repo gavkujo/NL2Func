@@ -17,6 +17,37 @@ if st.sidebar.button("🗑️ Clear Chat"):
         st.session_state.dispatcher = disp
     st.rerun()
 
+if "recap_mode" not in st.session_state:
+    st.session_state.recap_mode = False
+if "think_mode" not in st.session_state:
+    st.session_state.think_mode = False
+if "deep_mode" not in st.session_state:
+    st.session_state.deep_mode = False
+
+st.session_state.recap_mode = st.sidebar.toggle("Recap Mode (@recap)", value=st.session_state.recap_mode)
+st.sidebar.caption("Include a summary of previous conversation in the prompt.")
+
+def set_think():
+    st.session_state.think_mode = True
+    st.session_state.deep_mode = False
+
+def set_deep():
+    st.session_state.deep_mode = True
+    st.session_state.think_mode = False
+
+st.session_state.think_mode = st.sidebar.toggle("Think Mode (@think)", value=st.session_state.think_mode, on_change=set_think)
+st.sidebar.caption("Use the 'think' model for more reasoning.")
+
+st.session_state.deep_mode = st.sidebar.toggle("Deep Mode (@deep)", value=st.session_state.deep_mode, on_change=set_deep)
+st.sidebar.caption("Use the 'deep' model for more detailed answers.")
+
+# Ensure mutual exclusion
+if st.session_state.think_mode and st.session_state.deep_mode:
+    # If both got set somehow, default to think
+    st.session_state.deep_mode = False
+
+
+
 # --- Session State Initialization ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -91,6 +122,19 @@ given_input = st.chat_input("Type your message...", key="input")
 if given_input:
     # Top-level echo before any logic
     input_text = given_input.strip()
+    tags = []
+    if st.session_state.recap_mode and "@recap" not in input_text:
+        tags.append("@recap")
+    if st.session_state.think_mode and "@think" not in input_text:
+        tags.append("@think")
+    if st.session_state.deep_mode and "@deep" not in input_text:
+        tags.append("@deep")
+    # Remove mutually exclusive tags if both present
+    if st.session_state.think_mode and st.session_state.deep_mode:
+        tags = [t for t in tags if t != "@deep"]  # Prefer think
+    # Prepend tags to input
+    if tags:
+        input_text = " ".join(tags) + " | " + input_text
     # dispatch
     disp = st.session_state.dispatcher
 

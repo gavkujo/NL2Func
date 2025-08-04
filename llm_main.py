@@ -73,8 +73,9 @@ def build_messages(system, memory, user_input, classifier_data=None, func_guidel
             recap += f"Assistant ({i}): {assistant_msg.strip()}\n"
         messages.append({"role": "system", "content": recap.strip()})
 
-    # Always add the user query last
-    messages.append({"role": "user", "content": "\n === USER QUERY ===\n" + user_input})
+    # Always add the user query last, but REMOVE @recap from the message
+    cleaned_user_input = user_input.replace("@recap", "").strip()
+    messages.append({"role": "user", "content": "\n === USER QUERY ===\n" + cleaned_user_input})
     return messages
 
 # One-time warm-up for model
