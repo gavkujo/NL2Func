@@ -18,7 +18,7 @@ def render_assistant_message(msg):
         think_content = m.group(1).strip()
         with st.expander("💡 Thought process", expanded=False):
             st.markdown(
-                f"<span style='font-size:0.92em; color:#888;'>{think_content}</span>",
+                f"<div style='font-size:0.92em; color:#888; font-style:italic; background-color:#f6f6f6; padding:0.5em; border-radius:6px'>{think_content}</div>",
                 unsafe_allow_html=True
             )
         last_idx = m.end()
