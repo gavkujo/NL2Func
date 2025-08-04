@@ -15,7 +15,7 @@ if st.sidebar.button("🗑️ Clear Chat"):
     st.session_state.clear()
     if disp:
         st.session_state.dispatcher = disp
-    st.experimental_rerun()
+    st.rerun()
 
 # --- Session State Initialization ---
 if "chat_history" not in st.session_state:
@@ -115,6 +115,9 @@ if given_input:
         else:
             # build aux_ctx correctly
             slot_info["aux_ctx"] += f"\n{slot}: {answer}"
+            # Remove the filled slot from slots_needed
+            if slot_info["slots_needed"]:
+                slot_info["slots_needed"].pop(0)
             try:
                 print(f"[DEBUG] Calling pure_parse with aux_ctx: {slot_info['aux_ctx']}")
                 params = disp.pure_parse(slot_info["aux_ctx"], slot_info["func_name"])
@@ -127,6 +130,8 @@ if given_input:
                 print(f"[DEBUG] Exception in slot-filling: {e}")
                 if hasattr(e, "slot"):
                     print(f"[DEBUG] MissingSlot: {e.slot}")
+                    # Update slots_needed to ask for the next missing slot
+                    st.session_state.slot_state["slots_needed"] = [e.slot]
                     prompt = f"What's your {e.slot}?"
                     add_message("assistant", prompt)
                     with st.chat_message("assistant"):
