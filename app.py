@@ -99,6 +99,7 @@ if given_input:
         slot_info = st.session_state.slot_state
         slot = slot_info["slots_needed"][0]
         answer = input_text
+        print(f"[DEBUG] Slot-filling context before parse: {slot_info['aux_ctx']}")
         # echo answer
         add_message("user", answer)
         with st.chat_message("user"):
@@ -115,12 +116,17 @@ if given_input:
             # build aux_ctx correctly
             slot_info["aux_ctx"] += f"\n{slot}: {answer}"
             try:
+                print(f"[DEBUG] Calling pure_parse with aux_ctx: {slot_info['aux_ctx']}")
                 params = disp.pure_parse(slot_info["aux_ctx"], slot_info["func_name"])
+                print(f"[DEBUG] pure_parse returned params: {params}")
                 out = disp.run_function(slot_info["func_name"], params)
+                print(f"[DEBUG] run_function output: {out}")
                 st.session_state.slot_state = None
                 stream_response(slot_info["orig_query"], slot_info["func_name"], params, out)
             except Exception as e:
+                print(f"[DEBUG] Exception in slot-filling: {e}")
                 if hasattr(e, "slot"):
+                    print(f"[DEBUG] MissingSlot: {e.slot}")
                     prompt = f"What's your {e.slot}?"
                     add_message("assistant", prompt)
                     with st.chat_message("assistant"):
