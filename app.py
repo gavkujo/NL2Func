@@ -2,6 +2,31 @@ import streamlit as st
 from dispatcher import Dispatcher
 from llm_main import LLMRouter
 from main import Classifier
+import re
+
+def render_assistant_message(msg):
+    """
+    Render assistant message with <think>...</think> blocks styled as smaller, lighter, or collapsible.
+    """
+    # Find all <think>...</think> blocks
+    think_pattern = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+    parts = []
+    last_idx = 0
+    for m in think_pattern.finditer(msg):
+        # Add text before <think>
+        if m.start() > last_idx:
+            parts.append(st.markdown(msg[last_idx:m.start()], unsafe_allow_html=True))
+        # Add <think> block as collapsible or styled
+        think_content = m.group(1).strip()
+        with st.expander("💡 Thought process", expanded=False):
+            st.markdown(
+                f"<span style='font-size:0.92em; color:#888;'>{think_content}</span>",
+                unsafe_allow_html=True
+            )
+        last_idx = m.end()
+    # Add any remaining text after last <think>
+    if last_idx < len(msg):
+        parts.append(st.markdown(msg[last_idx:], unsafe_allow_html=True))
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
@@ -71,7 +96,9 @@ def add_message(role, message):
 def display_chat():
     for role, msg in st.session_state.chat_history:
         with st.chat_message(role):
-            if isinstance(msg, str):
+            if role == "assistant" and isinstance(msg, str) and "<think>" in msg:
+                render_assistant_message(msg)
+            elif isinstance(msg, str):
                 st.markdown(msg)
             else:
                 for chunk in msg:
@@ -97,7 +124,9 @@ def stream_response(user_input, func_name=None, params=None, func_output=None):
             )
             for token in stream:
                 full_response += token
-                placeholder.markdown(full_response)
+                # Live preview: render <think> blocks as plain text while streaming
+                # (final rendering will be styled in display_chat)
+                placeholder.markdown(full_response.replace("<think>", "💡 ").replace("</think>", ""), unsafe_allow_html=True)
         except TypeError:
             resp = st.session_state.llm_router.handle_user(
                 user_input,
@@ -106,7 +135,7 @@ def stream_response(user_input, func_name=None, params=None, func_output=None):
                 func_output=func_output,
             )
             full_response = resp if isinstance(resp, str) else str(resp)
-            placeholder.markdown(full_response)
+            placeholder.markdown(full_response.replace("<think>", "💡 ").replace("</think>", ""), unsafe_allow_html=True)
         except Exception as e:
             placeholder.markdown(f"**[Error: {e}]**")
             full_response = f"[Error: {e}]"
