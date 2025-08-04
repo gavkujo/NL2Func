@@ -13,22 +13,18 @@ def render_assistant_message(msg):
     thinks = think_pattern.findall(msg)
     main = think_pattern.sub("", msg).strip()
 
-    if thinks:
-        # Show each <think> block first
-        for i, think_content in enumerate(thinks, 1):
-            st.markdown(
-                f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
-                f"<b>💡 Thought process {i}:</b><br>"
-                f"<span style='font-size:0.92em; color:#888; font-style:italic;'>{think_content.strip()}</span>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-        # Then show the main answer if any
-        if main:
-            st.markdown(main, unsafe_allow_html=True)
-    else:
-        # No <think> blocks, just show the message
-        st.markdown(msg, unsafe_allow_html=True)
+    # Show each <think> block first (if any)
+    for i, think_content in enumerate(thinks, 1):
+        st.markdown(
+            f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
+            f"<b>💡 Thought process {i}:</b><br>"
+            f"<span style='font-size:0.92em; color:#888; font-style:italic;'>{think_content.strip()}</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+    # Then show the main answer if any
+    if main:
+        st.markdown(main, unsafe_allow_html=True)
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
@@ -73,8 +69,6 @@ if st.session_state.think_mode and st.session_state.deep_mode:
     # If both got set somehow, default to think
     st.session_state.deep_mode = False
 
-
-
 # --- Session State Initialization ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -93,7 +87,6 @@ def add_message(role, message):
     st.session_state.chat_history.append((role, message))
     if len(st.session_state.chat_history) > 200:
         st.session_state.chat_history.pop(0)
-
 
 def display_chat():
     for role, msg in st.session_state.chat_history:
@@ -128,7 +121,7 @@ def stream_response(user_input, func_name=None, params=None, func_output=None):
                 full_response += token
                 # Live preview: render <think> blocks as plain text while streaming
                 # (final rendering will be styled in display_chat)
-                placeholder.markdown(full_response.replace("<think>", "💡 ").replace("</think>", ""), unsafe_allow_html=True)
+                placeholder.markdown(full_response.replace("<think>", "\n---\n💡 **Thought process:**\n").replace("</think>", "\n---\n"), unsafe_allow_html=True)
         except TypeError:
             resp = st.session_state.llm_router.handle_user(
                 user_input,
@@ -137,15 +130,13 @@ def stream_response(user_input, func_name=None, params=None, func_output=None):
                 func_output=func_output,
             )
             full_response = resp if isinstance(resp, str) else str(resp)
-            placeholder.markdown(full_response.replace("<think>", "💡 ").replace("</think>", ""), unsafe_allow_html=True)
+            placeholder.markdown(full_response.replace("<think>", "\n---\n💡 **Thought process:**\n").replace("</think>", "\n---\n"), unsafe_allow_html=True)
         except Exception as e:
             placeholder.markdown(f"**[Error: {e}]**")
             full_response = f"[Error: {e}]"
 
     add_message("assistant", full_response)
 
-# --- Main Flow ---
-# Render existing chat
 # --- Main Flow ---
 display_chat()
 
