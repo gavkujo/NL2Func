@@ -6,25 +6,29 @@ import re
 
 def render_assistant_message(msg):
     """
-    Render assistant message with <think>...</think> blocks styled as smaller, lighter, or collapsible.
+    Render assistant message with <think>...</think> blocks shown first, then the main answer.
+    If there are no <think> blocks, just show the message as normal.
     """
     think_pattern = re.compile(r"<think>(.*?)</think>", re.DOTALL)
-    last_idx = 0
-    for m in think_pattern.finditer(msg):
-        # Display text before <think>
-        if m.start() > last_idx:
-            st.markdown(msg[last_idx:m.start()], unsafe_allow_html=True)
-        # Display <think> block as collapsible and styled
-        think_content = m.group(1).strip()
-        with st.expander("💡 Thought process", expanded=False):
+    thinks = think_pattern.findall(msg)
+    main = think_pattern.sub("", msg).strip()
+
+    if thinks:
+        # Show each <think> block first
+        for i, think_content in enumerate(thinks, 1):
             st.markdown(
-                f"<div style='font-size:0.92em; color:#888; font-style:italic; background-color:#f6f6f6; padding:0.5em; border-radius:6px'>{think_content}</div>",
+                f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
+                f"<b>💡 Thought process {i}:</b><br>"
+                f"<span style='font-size:0.92em; color:#888; font-style:italic;'>{think_content.strip()}</span>"
+                f"</div>",
                 unsafe_allow_html=True
             )
-        last_idx = m.end()
-    # Display any remaining text after last <think>
-    if last_idx < len(msg):
-        st.markdown(msg[last_idx:], unsafe_allow_html=True)
+        # Then show the main answer if any
+        if main:
+            st.markdown(main, unsafe_allow_html=True)
+    else:
+        # No <think> blocks, just show the message
+        st.markdown(msg, unsafe_allow_html=True)
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
