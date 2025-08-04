@@ -187,7 +187,8 @@ def parse_and_build(user_text: str, func_name: str):
     slot_values = {}
     for slot in needed_slots[func_name]:
         found = False
-        for sline in slot_lines:
+        # Search from the end to get the most recent value for this slot
+        for sline in reversed(slot_lines):
             m = re.match(rf'^{slot}:\s*(.+)$', sline.strip(), re.IGNORECASE)
             if m:
                 val = m.group(1).strip()
