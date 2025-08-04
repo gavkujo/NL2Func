@@ -8,15 +8,13 @@ def render_assistant_message(msg):
     """
     Render assistant message with <think>...</think> blocks styled as smaller, lighter, or collapsible.
     """
-    # Find all <think>...</think> blocks
     think_pattern = re.compile(r"<think>(.*?)</think>", re.DOTALL)
-    parts = []
     last_idx = 0
     for m in think_pattern.finditer(msg):
-        # Add text before <think>
+        # Display text before <think>
         if m.start() > last_idx:
-            parts.append(st.markdown(msg[last_idx:m.start()], unsafe_allow_html=True))
-        # Add <think> block as collapsible or styled
+            st.markdown(msg[last_idx:m.start()], unsafe_allow_html=True)
+        # Display <think> block as collapsible and styled
         think_content = m.group(1).strip()
         with st.expander("💡 Thought process", expanded=False):
             st.markdown(
@@ -24,9 +22,9 @@ def render_assistant_message(msg):
                 unsafe_allow_html=True
             )
         last_idx = m.end()
-    # Add any remaining text after last <think>
+    # Display any remaining text after last <think>
     if last_idx < len(msg):
-        parts.append(st.markdown(msg[last_idx:], unsafe_allow_html=True))
+        st.markdown(msg[last_idx:], unsafe_allow_html=True)
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
@@ -144,36 +142,20 @@ def stream_response(user_input, func_name=None, params=None, func_output=None):
 
 # --- Main Flow ---
 # Render existing chat
+# --- Main Flow ---
 display_chat()
 
-# Handle new input
 given_input = st.chat_input("Type your message...", key="input")
 if given_input:
-    # Top-level echo before any logic
     input_text = given_input.strip()
-    tags = []
-    if st.session_state.recap_mode and "@recap" not in input_text:
-        tags.append("@recap")
-    if st.session_state.think_mode and "@think" not in input_text:
-        tags.append("@think")
-    if st.session_state.deep_mode and "@deep" not in input_text:
-        tags.append("@deep")
-    # Remove mutually exclusive tags if both present
-    if st.session_state.think_mode and st.session_state.deep_mode:
-        tags = [t for t in tags if t != "@deep"]  # Prefer think
-    # Prepend tags to input
-    if tags:
-        input_text = " ".join(tags) + " | " + input_text
-    # dispatch
     disp = st.session_state.dispatcher
 
-    # Slot-filling active
+    # --- Slot-filling active ---
     if st.session_state.slot_state:
         slot_info = st.session_state.slot_state
         slot = slot_info["slots_needed"][0]
-        answer = input_text
+        answer = input_text  # DO NOT inject tags here!
         print(f"[DEBUG] Slot-filling context before parse: {slot_info['aux_ctx']}")
-        # echo answer
         add_message("user", answer)
         with st.chat_message("user"):
             st.markdown(answer)
@@ -186,9 +168,7 @@ if given_input:
             st.session_state.slot_state = None
             stream_response(slot_info["orig_query"])
         else:
-            # build aux_ctx correctly
             slot_info["aux_ctx"] += f"\n{slot}: {answer}"
-            # Remove the filled slot from slots_needed
             if slot_info["slots_needed"]:
                 slot_info["slots_needed"].pop(0)
             try:
@@ -203,21 +183,34 @@ if given_input:
                 print(f"[DEBUG] Exception in slot-filling: {e}")
                 if hasattr(e, "slot"):
                     print(f"[DEBUG] MissingSlot: {e.slot}")
-                    # Update slots_needed to ask for the next missing slot
                     st.session_state.slot_state["slots_needed"] = [e.slot]
                     prompt = f"What's your {e.slot}?"
                     add_message("assistant", prompt)
                     with st.chat_message("assistant"):
                         st.markdown(prompt)
-                    # slot_state remains
                 else:
                     err_msg = f"Error: {e}"
                     add_message("assistant", err_msg)
                     with st.chat_message("assistant"):
                         st.markdown(err_msg)
                     st.session_state.slot_state = None
+
+    # --- Initial classify (inject tags here only) ---
     else:
-        # initial classify
+        tags = []
+        if st.session_state.recap_mode and "@recap" not in input_text:
+            tags.append("@recap")
+        if st.session_state.think_mode and "@think" not in input_text:
+            tags.append("@think")
+        if st.session_state.deep_mode and "@deep" not in input_text:
+            tags.append("@deep")
+        # Remove mutually exclusive tags if both present
+        if st.session_state.think_mode and st.session_state.deep_mode:
+            tags = [t for t in tags if t != "@deep"]  # Prefer think
+        # Prepend tags to input (space-separated)
+        if tags:
+            input_text = " ".join(tags) + " " + input_text
+
         func_name, _ = disp.classify(input_text)
         if func_name:
             try:
@@ -226,7 +219,6 @@ if given_input:
                 stream_response(input_text, func_name, params, out)
             except Exception as e:
                 if hasattr(e, "slot"):
-                    # set up slot_state and prompt
                     st.session_state.slot_state = {
                         "func_name": func_name,
                         "aux_ctx": input_text,
@@ -243,5 +235,4 @@ if given_input:
                     with st.chat_message("assistant"):
                         st.markdown(err_msg)
         else:
-            # direct LLM
             stream_response(input_text)
