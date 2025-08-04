@@ -47,20 +47,38 @@ MONTH_MAP = {
     'sep': '09', 'sept': '09', 'oct': '10', 'nov': '11', 'dec': '12'
 }
 
-def normalize_date_input(date_str):
-    """Parse user date input and convert to YYYY-MM-DD, retry until valid."""
+from datetime import datetime, timedelta
+
+def normalize_date_input(date_str, ref_date=None, slot_name=None, feedback_list=None):
+    """Parse user date input and convert to YYYY-MM-DD, using ref_date for year inference if needed.
+    Uses regex first, then dateparser fallback with context-aware logic.
+    """
     date_str = date_str.strip()
+    lower = date_str.lower()
+
+    # Handle explicit "today", "tomorrow", etc.
+    if lower in {"today", "now"}:
+        dt = datetime.now()
+        if feedback_list is not None:
+            feedback_list.append(f"Inferred '{slot_name}' as today: {dt.date().isoformat()}")
+        return dt.date().isoformat()
+    if lower in {"tomorrow"}:
+        dt = datetime.now() + timedelta(days=1)
+        if feedback_list is not None:
+            feedback_list.append(f"Inferred '{slot_name}' as tomorrow: {dt.date().isoformat()}")
+        return dt.date().isoformat()
+
     date_patterns = [
         r"(\d{2})[\-/](\d{2})[\-/](\d{4})",        # DD-MM-YYYY or DD/MM/YYYY
         r"(\d{4})[\-/](\d{2})[\-/](\d{2})",        # YYYY-MM-DD or YYYY/MM/DD
         r"(\d{2})[\-/](\d{2})",                    # DD-MM or DD/MM (no year)
-        # **Move DD Month [Year] *before* Month Year!**
         r"(\d{1,2})\s+([A-Za-z]+)\s*(\d{4})?",     # 16 Aug OR 16 Aug 2024
         r"([A-Za-z]+)\s+(\d{2,4})",                # Aug 24 or August 2024
         r"([A-Za-z]+)\s+(\d{1,2})",                # Aug 16
         r"(\d{1,2})\s+([A-Za-z]+)"                 # 16 August
     ]
 
+    # Try regex patterns first
     for pat in date_patterns:
         m = re.search(pat, date_str)
         if not m:
@@ -76,18 +94,39 @@ def normalize_date_input(date_str):
             y, mth, d = m.groups()
             return f"{y}-{mth.zfill(2)}-{d.zfill(2)}"
 
-        # 3) DD-MM (no year → assume current year)
+        # 3) DD-MM (no year → infer year)
         if pat == date_patterns[2]:
             d, mth = m.groups()
-            return f"2025-{mth.zfill(2)}-{d.zfill(2)}"
+            base_year = 2025
+            if ref_date:
+                ref_year = date_parse(ref_date).year
+                base_year = ref_year
+            # Try to bump year if needed
+            try:
+                candidate = datetime(year=base_year, month=int(mth), day=int(d))
+                if ref_date and candidate.date() < date_parse(ref_date).date():
+                    candidate = candidate.replace(year=base_year + 1)
+                return candidate.date().isoformat()
+            except Exception:
+                return None
 
         # 4) DD Month [Year]
         if pat == date_patterns[3]:
             d, month, y = m.groups()
             mon = month.lower()[:3]
             mnum = MONTH_MAP.get(mon, '01')
-            year = y if y and len(y)==4 else '2025'
-            return f"{year}-{mnum}-{d.zfill(2)}"
+            year = y if y and len(y)==4 else None
+            if not year:
+                year = 2025
+                if ref_date:
+                    year = date_parse(ref_date).year
+            try:
+                candidate = datetime(year=int(year), month=int(mnum), day=int(d))
+                if not y and ref_date and candidate.date() < date_parse(ref_date).date():
+                    candidate = candidate.replace(year=int(year) + 1)
+                return candidate.date().isoformat()
+            except Exception:
+                return None
 
         # 5) Month Year
         if pat == date_patterns[4]:
@@ -95,25 +134,101 @@ def normalize_date_input(date_str):
             mon = month.lower()[:3]
             mnum = MONTH_MAP.get(mon, '01')
             y = year if len(year)==4 else f"20{year[-2:]}"
-            return f"{y}-{mnum}-01"
+            try:
+                candidate = datetime(year=int(y), month=int(mnum), day=1)
+                return candidate.date().isoformat()
+            except Exception:
+                return None
 
         # 6) Month DD
         if pat == date_patterns[5]:
             month, d = m.groups()
             mon = month.lower()[:3]
             mnum = MONTH_MAP.get(mon, '01')
-            return f"2025-{mnum}-{d.zfill(2)}"
+            base_year = 2025
+            if ref_date:
+                base_year = date_parse(ref_date).year
+            try:
+                candidate = datetime(year=base_year, month=int(mnum), day=int(d))
+                if ref_date and candidate.date() < date_parse(ref_date).date():
+                    candidate = candidate.replace(year=base_year + 1)
+                return candidate.date().isoformat()
+            except Exception:
+                return None
 
         # 7) DD Month
         if pat == date_patterns[6]:
             d, month = m.groups()
             mon = month.lower()[:3]
             mnum = MONTH_MAP.get(mon, '01')
-            return f"2025-{mnum}-{d.zfill(2)}"
+            base_year = 2025
+            if ref_date:
+                base_year = date_parse(ref_date).year
+            try:
+                candidate = datetime(year=base_year, month=int(mnum), day=int(d))
+                if ref_date and candidate.date() < date_parse(ref_date).date():
+                    candidate = candidate.replace(year=base_year + 1)
+                return candidate.date().isoformat()
+            except Exception:
+                return None
 
-    # fallback to dateparser for the wild ones
-    dt = date_parse(date_str, settings={'PREFER_DATES_FROM': 'past'})
-    return dt.date().isoformat() if dt else None
+    # fallback to dateparser for the wild ones (natural language, ambiguous, etc)
+    settings = {'PREFER_DATES_FROM': 'future'}
+    ref_dt = date_parse(ref_date) if ref_date else None
+    if ref_dt:
+        settings['RELATIVE_BASE'] = ref_dt
+    else:
+        settings['RELATIVE_BASE'] = datetime.now()
+    dt = date_parse(date_str, settings=settings)
+    if not dt:
+        if feedback_list is not None:
+            feedback_list.append(f"Could not parse '{slot_name}' from input: '{date_str}'")
+        return None
+
+    date_obj = dt.date()
+    # If user gave a year, always use it
+    explicit_year = re.search(r"\b(20\d{2})\b", date_str)
+    if explicit_year:
+        if feedback_list is not None:
+            feedback_list.append(f"Inferred '{slot_name}' as {date_obj.isoformat()} (explicit year in input)")
+        return date_obj.isoformat()
+
+    # If no year, always parse with reference year, bump if needed
+    if ref_dt:
+        try:
+            forced = date_obj.replace(year=ref_dt.year)
+        except Exception:
+            forced = date_obj.replace(month=3, day=1, year=ref_dt.year)
+        if forced < ref_dt.date():
+            try:
+                forced = forced.replace(year=ref_dt.year + 1)
+            except Exception:
+                forced = forced.replace(month=3, day=1, year=ref_dt.year + 1)
+        if feedback_list is not None:
+            feedback_list.append(f"Inferred '{slot_name}' as {forced.isoformat()} (relative to {ref_dt.date().isoformat()})")
+        return forced.isoformat()
+    else:
+        if feedback_list is not None:
+            feedback_list.append(f"Inferred '{slot_name}' as {date_obj.isoformat()} (no reference date)")
+        return date_obj.isoformat()
+
+def validate_date_order(scd, asd, max_date, feedback_list=None):
+    d1 = date_parse(scd).date()
+    d2 = date_parse(asd).date()
+    d3 = date_parse(max_date).date()
+    # Friendly error if order is wrong
+    if not (d1 < d2 < d3):
+        order = sorted([('SCD', d1), ('ASD', d2), ('max_date', d3)], key=lambda x: x[1])
+        msg = "Invalid date order. Did you mean: "
+        msg += " < ".join(f"{name}={dt}" for name, dt in order)
+        if feedback_list is not None:
+            feedback_list.append(msg)
+        raise ValueError(msg)
+    # Warn if SCD and ASD are more than 40 days apart (usually within a month)
+    if (d2 - d1).days > 40:
+        warn = f"⚠️ Warning: SCD ({d1}) and ASD ({d2}) are more than 40 days apart. Usually these are within a month."
+        if feedback_list is not None:
+            feedback_list.append(warn)
 
 def input_date_slot(slot_name):
     """Prompt user for date input and normalize it."""
@@ -185,17 +300,27 @@ def parse_and_build(user_text: str, func_name: str):
 
     # Only check for slot values in the slot-filling context (never extract from original user input)
     slot_values = {}
+    ref_dates = {}
+    feedback = []
     for slot in needed_slots[func_name]:
         found = False
-        # Search from the end to get the most recent value for this slot
         for sline in reversed(slot_lines):
             m = re.match(rf'^{slot}:\s*(.+)$', sline.strip(), re.IGNORECASE)
             if m:
                 val = m.group(1).strip()
-                # Normalize date for date slots
+                # Normalize date for date slots, using SCD as reference for ASD/max_date
                 if slot in ['SCD', 'ASD', 'max_date']:
-                    norm = normalize_date_input(val)
+                    if slot == 'SCD':
+                        norm = normalize_date_input(val, slot_name='SCD', feedback_list=feedback)
+                        ref_dates['SCD'] = norm
+                    elif slot == 'ASD':
+                        norm = normalize_date_input(val, ref_date=ref_dates.get('SCD'), slot_name='ASD', feedback_list=feedback)
+                        ref_dates['ASD'] = norm
+                    elif slot == 'max_date':
+                        norm = normalize_date_input(val, ref_date=ref_dates.get('ASD') or ref_dates.get('SCD'), slot_name='max_date', feedback_list=feedback)
                     if not norm:
+                        if feedback:
+                            raise ValueError("\n".join(feedback))
                         raise MissingSlot(slot)  # Will re-prompt if invalid
                     slot_values[slot] = norm
                 else:
@@ -204,6 +329,13 @@ def parse_and_build(user_text: str, func_name: str):
                 break
         if not found:
             raise MissingSlot(slot)
+
+    # Sanity check date order if all present
+    if func_name in ['Asaoka_data', 'reporter_Asaoka']:
+        validate_date_order(slot_values['SCD'], slot_values['ASD'], slot_values['max_date'])
+    if feedback:
+        print("\n".join(feedback))
+
 
     # Return params dict with normalized date values
     if func_name == 'Asaoka_data':
@@ -214,36 +346,27 @@ def parse_and_build(user_text: str, func_name: str):
         return {'ids': plates, 'max_date': slot_values['max_date']}
     else:
         raise ValueError(f"Function '{func_name}' not supported.")
-def main_test_examples():
-    print("\n--- Testing parse_and_build on example usage ---\n")
-    for i, (text, func_name) in enumerate(examples, 1):
-        print(f"Example {i}: {func_name}")
-        print(f"Input: {text}")
-        if func_name == "None":
-            print("  [SKIP] No function to parse.\n")
-            continue
-        try:
-            plates = find_plates(text)
-            print(f"  Extracted plates: {plates}")
-            needed_slots = {
-                'Asaoka_data': ['SCD', 'ASD', 'max_date'],
-                'reporter_Asaoka': ['SCD', 'ASD', 'max_date'],
-                'plot_combi_S': ['max_date'],
-            }
-            missing = []
-            for slot in needed_slots[func_name]:
-                if slot != 'id':
-                    try:
-                        raise MissingSlot(slot)
-                    except MissingSlot as ms:
-                        missing.append(ms.slot)
-            print(f"  Missing slots (should be prompted): {missing}\n")
-        except Exception as e:
-            print(f"  [ERROR] {e}\n")
 
+
+def interactive_date_tester():
+    print("=== Interactive Date Parser Tester ===")
+    print("Enter a reference date (YYYY-MM-DD) or leave blank for today:")
+    ref_date = input("Reference date: ").strip() or None
+    while True:
+        date_str = input("\nEnter a date string (or 'q' to quit): ").strip()
+        if date_str.lower() in {"q", "quit", "exit"}:
+            print("Exiting tester.")
+            break
+        feedback = []
+        result = normalize_date_input(date_str, ref_date=ref_date, slot_name="test", feedback_list=feedback)
+        print(f"Parsed: {result}")
+        if feedback:
+            print("Feedback:")
+            for f in feedback:
+                print("  -", f)
 
 if __name__ == "__main__":
-    main_test_examples()
+    interactive_date_tester()
 
 
 
