@@ -169,16 +169,13 @@ class LLMRouter:
         self.warmed_up_models.add(MODEL_CONFIG["text"])
 
 
-    def handle_user(self, user_input: str, func_name=None, classifier_data=None, func_output=None):
+    def handle_user(self, user_input: str, func_name=None, classifier_data=None, func_output=None, stream=False):
         cleaned_input = strip_think(user_input)
         model = select_model(cleaned_input)
 
-        # Warm up if not already
         if model not in self.warmed_up_models:
-            #warmup_model(model)
             self.warmed_up_models.add(model)
 
-        # Select function-specific guidelines/context
         func_guidelines = FUNCTION_GUIDELINES.get(func_name)
         messages = build_messages(
             self.system_messages,
@@ -188,31 +185,26 @@ class LLMRouter:
             func_guidelines=func_guidelines,
             func_output=func_output
         )
-        print(f"[Debug] Selected model: {model}")
-        print(f"[Debug] Message count as a json: {len(messages)}")
-        print(f"[Debug] Full message length as a string: {len(str(messages))}")
-        print(f"[Debug] Full message: \n\n {messages} \n\n")
 
-        start = time.time()
-        response = ""
-        first = True
-        for token in ollama_stream(messages, model):
-            if first:
-                print("\r", end="", flush=True)
-                ends = time.time()
-                first = False
-            print(token, end='', flush=True)
-            response += token
-        duration = time.time() - start
-        firsttok = ends-start
-        print(f"\n[Debug] Inference time: {duration:.2f}s with model: {model}")
-        print(f"\n[Debug] First Token time: {firsttok:.2f}s with model: {model}")
-
-        # Update memory
-        summary = get_summary(response)  # lightweight summarizer
-        self.memory.append((cleaned_input, summary))
-        self.memory = self.memory[-self.max_turns:]
-        return response
+        if stream:
+            # Streaming mode: yield tokens as they arrive
+            response = ""
+            for token in ollama_stream(messages, model):
+                yield token
+                response += token
+            # After streaming, update memory
+            summary = get_summary(response)
+            self.memory.append((cleaned_input, summary))
+            self.memory = self.memory[-self.max_turns:]
+        else:
+            # Non-streaming mode: collect all tokens, then return
+            response = ""
+            for token in ollama_stream(messages, model):
+                response += token
+            summary = get_summary(response)
+            self.memory.append((cleaned_input, summary))
+            self.memory = self.memory[-self.max_turns:]
+            return response
     
 
 
