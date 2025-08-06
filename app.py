@@ -28,10 +28,10 @@ def render_assistant_message(msg):
         st.markdown(main, unsafe_allow_html=True)
     if "==PDF ALERT==" in msg:
         if "asaoka_report.pdf" in os.listdir():
-            with open("asaoka_report.pdf", "rb") as f:
+            with open("pasaoka_report.pdf", "rb") as f:
                 st.download_button(
                     label="Download Asaoka Report PDF",
-                    data=f.read(),
+                    data=f,
                     file_name="asaoka_report.pdf",
                     mime="application/pdf"
                 )
@@ -39,7 +39,7 @@ def render_assistant_message(msg):
             with open("Combined_settlement_plot.pdf", "rb") as f:
                 st.download_button(
                     label="Download Combined Settlement Plot PDF",
-                    data=f.read(),
+                    data=f,
                     file_name="Combined_settlement_plot.pdf",
                     mime="application/pdf"
                 )

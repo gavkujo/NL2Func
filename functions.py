@@ -19,7 +19,7 @@ def Func2(ids, SCD, ASD, max_date):
     """Generate a report for Asaoka data with given parameters."""
     # Implementation of reporter generation
     try:
-        with open("pdf/asaoka_report.pdf", "wb") as f:
+        with open("asaoka_report.pdf", "wb") as f:
             f.write(reporter_Asaoka(ids, SCD, ASD, max_date, n=4, asaoka_days=7, dtick=500))
     except Exception as e:
         print(">>> error <<<\n", e)
@@ -29,7 +29,7 @@ def Func3(ids, max_date):
     """Plot combined data for given ids and max_date."""
     # Implementation of plotting
     try:
-        with open("pdf/Combined_settlement_plot.pdf", "wb") as f:
+        with open("Combined_settlement_plot.pdf", "wb") as f:
             f.write(reporter_Settlement(ids, max_date))
     except Exception as e:
         print(">>> error <<<\n", e)

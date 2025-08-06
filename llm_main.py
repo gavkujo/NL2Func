@@ -114,14 +114,15 @@ def build_messages(system, memory, user_input, classifier_data=None, func_guidel
 
     # Add recap if requested
     if "@recap" in user_input and memory:
+        cleaned_user_input = user_input.replace("@recap", "").strip()
         recap = "=== PREVIOUS CONVERSATION ===\n"
-        for i, (user_msg, assistant_msg) in enumerate(memory, 1):
-            recap += f"User ({i}): {user_msg.strip()}\n"
+        for i, (cleaned_user_input, assistant_msg) in enumerate(memory, 1):
+            recap += f"User ({i}): {cleaned_user_input.strip()}\n"
             recap += f"Assistant ({i}): {assistant_msg.strip()}\n"
         messages.append({"role": "system", "content": recap.strip()})
 
     # Always add the user query last, but REMOVE @recap from the message
-    cleaned_user_input = user_input.replace("@recap", "").strip()
+    # cleaned_user_input = user_input.replace("@recap", "").strip()
     messages.append({"role": "user", "content": "\n === USER QUERY ===\n" + cleaned_user_input})
     return messages
 
@@ -240,6 +241,7 @@ class LLMRouter:
             func_guidelines=func_guidelines,
             func_output=func_output
         )
+        print("FINAL MESSAGE \n", messages)
 
         if stream:
             # Streaming mode: yield tokens as they arrive
