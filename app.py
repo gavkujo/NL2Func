@@ -27,22 +27,13 @@ def render_assistant_message(msg):
     if main:
         st.markdown(main, unsafe_allow_html=True)
     if "==PDF ALERT==" in msg:
-        if "asaoka_report.pdf" in os.listdir():
-            with open("pasaoka_report.pdf", "rb") as f:
-                st.download_button(
-                    label="Download Asaoka Report PDF",
-                    data=f,
-                    file_name="asaoka_report.pdf",
-                    mime="application/pdf"
-                )
-        if "Combined_settlement_plot.pdf" in os.listdir():
-            with open("Combined_settlement_plot.pdf", "rb") as f:
-                st.download_button(
-                    label="Download Combined Settlement Plot PDF",
-                    data=f,
-                    file_name="Combined_settlement_plot.pdf",
-                    mime="application/pdf"
-                )
+        links = []
+        if os.path.exists("pdf/asaoka_report.pdf"):
+            links.append("[Download Asaoka Report PDF](pdf/asaoka_report.pdf)")
+        if os.path.exists("pdf/Combined_settlement_plot.pdf"):
+            links.append("[Download Combined Settlement Plot PDF](pdf/Combined_settlement_plot.pdf)")
+        if links:
+            st.markdown("<br>".join(links), unsafe_allow_html=True)
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
