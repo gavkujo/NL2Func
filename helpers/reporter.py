@@ -286,7 +286,7 @@ def plot_pg_1(id, df_S, df_A, table_S, table_A, SCD, ASD, trendline, Y_dtick=500
         xanchor="left",
         x=0
     ))
-
+    fig.show()
     pg1 = fig.to_image(format="pdf", width=800, height=1124)
     return pg1
 
@@ -336,7 +336,7 @@ def plot_pg_2(id, df_plot):
         xanchor="left",
         x=0
     ))
-
+    fig.show()
     pg2 = fig.to_image(format="pdf", width=800, height=1124)
     return pg2
 

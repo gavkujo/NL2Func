@@ -253,6 +253,10 @@ def build_function_call(func_name, plates, dates):
         ids_list = ", ".join(f"'{p}'" for p in plates)
         return f"plot_combi_S(ids=[{ids_list}], max_date='{dates['max_date']}')"
     
+    elif func_name == 'SM_Overview':
+        ids_list = ", ".join(f"'{p}'" for p in plates)
+        return f"SM_Overview(ids=[{ids_list}])"
+    
     else:
         return f"# Unknown function: {func_name}"
     
@@ -293,6 +297,7 @@ def parse_and_build(user_text: str, func_name: str):
         'Asaoka_data': ['SCD', 'ASD', 'max_date'],
         'reporter_Asaoka': ['SCD', 'ASD', 'max_date'],
         'plot_combi_S': ['max_date'],
+        'SM_Overview': []
     }
 
     if func_name not in needed_slots:
@@ -344,6 +349,8 @@ def parse_and_build(user_text: str, func_name: str):
         return {'ids': plates, 'SCD': slot_values['SCD'], 'ASD': slot_values['ASD'], 'max_date': slot_values['max_date']}
     elif func_name == 'plot_combi_S':
         return {'ids': plates, 'max_date': slot_values['max_date']}
+    elif func_name == 'SM_Overview':
+        return {'ids': plates}
     else:
         raise ValueError(f"Function '{func_name}' not supported.")
 
