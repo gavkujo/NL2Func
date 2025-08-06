@@ -3,6 +3,7 @@ from dispatcher import Dispatcher
 from llm_main import LLMRouter
 from main import Classifier
 import re
+import os 
 
 def render_assistant_message(msg):
     """
@@ -25,6 +26,23 @@ def render_assistant_message(msg):
     # Then show the main answer if any
     if main:
         st.markdown(main, unsafe_allow_html=True)
+    if "==PDF ALERT==" in msg:
+        if "asaoka_report.pdf" in os.listdir():
+            with open("asaoka_report.pdf", "rb") as f:
+                st.download_button(
+                    label="Download Asaoka Report PDF",
+                    data=f.read(),
+                    file_name="asaoka_report.pdf",
+                    mime="application/pdf"
+                )
+        if "Combined_settlement_plot.pdf" in os.listdir():
+            with open("Combined_settlement_plot.pdf", "rb") as f:
+                st.download_button(
+                    label="Download Combined Settlement Plot PDF",
+                    data=f.read(),
+                    file_name="Combined_settlement_plot.pdf",
+                    mime="application/pdf"
+                )
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
