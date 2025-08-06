@@ -37,9 +37,10 @@ class Dispatcher:
     def run_function(self, func_name, params):
         # Map function name to actual function in functions.py
         func_map = {
-            'Asaoka_data': functions.asaoka_data,
-            'reporter_Asaoka': functions.reporter_asaoka,
-            'plot_combi_S': functions.plot_combi_S
+            'Asaoka_data': functions.Func1,
+            'reporter_Asaoka': functions.Func2,
+            'plot_combi_S': functions.Func3,
+            'SM_Overview': functions.Func4
         }
         func = func_map.get(func_name)
         if func and params:

@@ -1,0 +1,13 @@
+numpy
+pandas
+openpyxl
+pyodbc
+pymssql
+plotly
+pypdf2
+reportlab
+transformers
+sentencepiece
+dateparser
+torch
+tqdm
