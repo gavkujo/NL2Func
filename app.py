@@ -176,13 +176,18 @@ if given_input:
             if slot_info["slots_needed"]:
                 slot_info["slots_needed"].pop(0)
             try:
-                print(f"[DEBUG] Calling pure_parse with aux_ctx: {slot_info['aux_ctx']}")
                 params = disp.pure_parse(slot_info["aux_ctx"], slot_info["func_name"])
-                print(f"[DEBUG] pure_parse returned params: {params}")
                 out = disp.run_function(slot_info["func_name"], params)
-                print(f"[DEBUG] run_function output: {out}")
                 st.session_state.slot_state = None
-                stream_response(slot_info["orig_query"], slot_info["func_name"], params, out)
+                
+                # Add this check to skip LLM for PDF functions in slot-filling path
+                if slot_info["func_name"] in ["reporter_Asaoka", "plot_combi_S"]:
+                    with st.chat_message("assistant"), st.spinner("Generating PDF..."):
+                        pdf_msg = "==PDF ALERT==\nA PDF has been generated and is ready for download below."
+                        add_message("assistant", pdf_msg)
+                        render_assistant_message(pdf_msg, func_name=slot_info["func_name"])
+                else:
+                    stream_response(slot_info["orig_query"], slot_info["func_name"], params, out)
             except Exception as e:
                 print(f"[DEBUG] Exception in slot-filling: {e}")
                 if hasattr(e, "slot"):
