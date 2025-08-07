@@ -5,7 +5,7 @@ from main import Classifier
 import re
 import os 
 
-def render_assistant_message(msg):
+def render_assistant_message(msg, func_name=None):
     """
     Render assistant message with <think>...</think> blocks shown first, then the main answer.
     If there are no <think> blocks, just show the message as normal.
@@ -28,9 +28,11 @@ def render_assistant_message(msg):
         st.markdown(main, unsafe_allow_html=True)
     if "==PDF ALERT==" in msg:
         links = []
-        if os.path.exists("static/asaoka_report.pdf"):
+        #if os.path.exists("static/asaoka_report.pdf"):
+        if "reporter_Asaoka" in func_name:
             links.append("[Download Asaoka Report PDF](static/asaoka_report.pdf)")
-        if os.path.exists("static/Combined_settlement_plot.pdf"):
+        #if os.path.exists("static/Combined_settlement_plot.pdf"):
+        if "plot_combi_S" in func_name:
             links.append("[Download Combined Settlement Plot PDF](static/Combined_settlement_plot.pdf)")
         if links:
             st.markdown("<br>".join(links), unsafe_allow_html=True)
