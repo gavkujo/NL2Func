@@ -219,15 +219,14 @@ if given_input:
         if func_name:
             try:
                 params = disp.pure_parse(input_text, func_name)
+                out = disp.run_function(func_name, params)
                 # Show spinner while generating PDF
                 if func_name in ["reporter_Asaoka", "plot_combi_S"]:
                     with st.chat_message("assistant"), st.spinner("Generating PDF..."):
-                        out = disp.run_function(func_name, params)
                         pdf_msg = "==PDF ALERT==\nA PDF has been generated and is ready for download below."
                         add_message("assistant", pdf_msg)
                         render_assistant_message(pdf_msg, func_name=func_name)
                 else:
-                    out = disp.run_function(func_name, params)
                     stream_response(input_text, func_name, params, out)
             except Exception as e:
                 if hasattr(e, "slot"):
