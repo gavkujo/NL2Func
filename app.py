@@ -241,6 +241,7 @@ if given_input:
                     with st.chat_message("assistant"):
                         st.markdown(prompt)
                 else:
+                    print(f"[DEBUG] Exception caught: {e}")
                     err_msg = f"Error: {e}"
                     add_message("assistant", err_msg)
                     with st.chat_message("assistant"):
