@@ -27,15 +27,22 @@ def render_assistant_message(msg, func_name=None):
     if main:
         st.markdown(main, unsafe_allow_html=True)
     if "==PDF ALERT==" in msg:
-        links = []
-        #if os.path.exists("static/asaoka_report.pdf"):
-        if "reporter_Asaoka" in func_name:
-            links.append("[Download Asaoka Report PDF](static/asaoka_report.pdf)")
-        #if os.path.exists("static/Combined_settlement_plot.pdf"):
-        if "plot_combi_S" in func_name:
-            links.append("[Download Combined Settlement Plot PDF](static/Combined_settlement_plot.pdf)")
-        if links:
-            st.markdown("<br>".join(links), unsafe_allow_html=True)
+        if func_name == "reporter_Asaoka" and os.path.exists("static/asaoka_report.pdf"):
+            with open("static/asaoka_report.pdf", "rb") as f:
+                st.download_button(
+                    label="Download Asaoka Report PDF",
+                    data=f.read(),
+                    file_name="asaoka_report.pdf",
+                    mime="application/pdf"
+                )
+        elif func_name == "plot_combi_S" and os.path.exists("static/Combined_settlement_plot.pdf"):
+            with open("static/Combined_settlement_plot.pdf", "rb") as f:
+                st.download_button(
+                    label="Download Combined Settlement Plot PDF", 
+                    data=f.read(),
+                    file_name="Combined_settlement_plot.pdf",
+                    mime="application/pdf"
+                )
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="NL2Func Chat", layout="wide")
@@ -227,14 +234,7 @@ if given_input:
             try:
                 params = disp.pure_parse(input_text, func_name)
                 out = disp.run_function(func_name, params)
-                # Show spinner while generating PDF
-                if func_name in ["reporter_Asaoka", "plot_combi_S"]:
-                    with st.chat_message("assistant"), st.spinner("Generating PDF..."):
-                        pdf_msg = "==PDF ALERT==\nA PDF has been generated and is ready for download below."
-                        add_message("assistant", pdf_msg)
-                        render_assistant_message(pdf_msg, func_name=func_name)
-                else:
-                    stream_response(input_text, func_name, params, out)
+                stream_response(input_text, func_name, params, out)
             except Exception as e:
                 if hasattr(e, "slot"):
                     st.session_state.slot_state = {
