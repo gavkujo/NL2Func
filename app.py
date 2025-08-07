@@ -45,8 +45,8 @@ def render_assistant_message(msg, func_name=None):
                 )
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
-st.set_page_config(page_title="NL2Func Chat", layout="wide")
-st.title("NL2Func Chat Assistant")
+st.set_page_config(page_title="Boskalis GeoChat", layout="wide")
+st.title("Boskalis GeoChat Assistant")
 
 # --- Sidebar Controls ---
 st.sidebar.markdown("### Controls")
