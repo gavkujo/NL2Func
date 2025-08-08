@@ -38,7 +38,7 @@ class Classifier:
         out_ids = greedy_decode(self.model, src_ids, self.sp, self.max_len, self.device)
         tokens = [self.sp.IdToPiece(i) for i in out_ids[1:]]  # exclude BOS
         text = self.sp.DecodePieces(tokens).strip()
-        KNOWN_FUNCTIONS = {"Asaoka_data", "reporter_Asaoka", "plot_combi_S"}
+        KNOWN_FUNCTIONS = {"Asaoka_data", "reporter_Asaoka", "plot_combi_S", "SM_overview"}
         # Try JSON first
         try:
             result = json.loads(text)

@@ -38,7 +38,7 @@ class Dispatcher:
             'Asaoka_data': functions.Func1,
             'reporter_Asaoka': functions.Func2,
             'plot_combi_S': functions.Func3,
-            'SM_Overview': functions.Func4
+            'SM_overview': functions.Func4
         }
         func = func_map.get(func_name)
         if func and params:
