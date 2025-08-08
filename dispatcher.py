@@ -12,8 +12,6 @@ class Dispatcher:
         return self.classifier.classify(raw_query)
 
     def pure_parse(self, raw_query, func_name):
-        # Refactor parse_and_build to not call input(), but raise MissingSlot
-        # For now, pseudo-code:
         try:
             return parse_and_build(raw_query, func_name)
         except ValueError as e:

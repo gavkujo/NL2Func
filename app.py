@@ -162,9 +162,11 @@ given_input = st.chat_input("Type your message...", key="input")
 if given_input:
     input_text = given_input.strip()
     disp = st.session_state.dispatcher
+    print("[DEBUG] Inp Recieved")
 
     # --- Slot-filling active ---
     if st.session_state.slot_state:
+        print("[DEBUG] Slot State active")
         slot_info = st.session_state.slot_state
         slot = slot_info["slots_needed"][0]
         answer = input_text  # DO NOT inject tags here!
@@ -191,6 +193,9 @@ if given_input:
                 
                 # Add this check to skip LLM for PDF functions in slot-filling path
                 if slot_info["func_name"] in ["reporter_Asaoka", "plot_combi_S"]:
+                    add_message("user", slot_info["orig_query"])
+                    with st.chat_message("user"):
+                        st.markdown(slot_info["orig_query"])
                     with st.chat_message("assistant"), st.spinner("Generating PDF..."):
                         pdf_msg = "==PDF ALERT==\nA PDF has been generated and is ready for download below."
                         add_message("assistant", pdf_msg)
@@ -215,6 +220,7 @@ if given_input:
 
     # --- Initial classify (inject tags here only) ---
     else:
+        print("[DEBUG] Tags case active")
         tags = []
         if st.session_state.recap_mode and "@recap" not in input_text:
             tags.append("@recap")
@@ -230,10 +236,12 @@ if given_input:
             input_text = " ".join(tags) + " " + input_text
 
         func_name, _ = disp.classify(input_text)
+        print("[DEBUG] func_name = ", func_name)
         if func_name:
             try:
                 params = disp.pure_parse(input_text, func_name)
                 out = disp.run_function(func_name, params)
+                print("[DEBUG] OUTPUT after running: ", out)
                 stream_response(input_text, func_name, params, out)
             except Exception as e:
                 if hasattr(e, "slot"):
@@ -254,4 +262,5 @@ if given_input:
                     with st.chat_message("assistant"):
                         st.markdown(err_msg)
         else:
+            print("[DEBUG] Function calling skipped")
             stream_response(input_text)
