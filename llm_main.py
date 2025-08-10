@@ -15,40 +15,16 @@ def fused_system_message(system, func_guidelines=None):
 FUNCTION_GUIDELINES = {
     "Asaoka_data": '''
 === FUNCTIONAL INSTRUCTIONS ===
-You will receive a JSON list of settlement plate data relevant to the user query. Based on this data and the following instructions, answer the user’s query precisely.
-
-Key Concepts:
-- Settlement plates measure ground settlement in meters (m). More negative values indicate greater settlement from a baseline elevation.
-- Settlement results from soil consolidation under surcharge load (a sand layer that compresses the ground).
-- Settlement plates follow a naming format like 'F3-R03a-SM-01': 
-  - 'R03a' identifies the region,
-  - 'SM' denotes Settlement Plate,
-  - '01' is the plate index.
-  Do not comment on or interpret these IDs—they are fixed references.
-- Settlement varies between plates due to unique soil layering beneath each plate, even under identical ground conditions.
-- '7day_rate' indicates settlement amount over the past 7 days (in mm).
-- 'Latest_GL' is the latest ground elevation (in mCD); higher values indicate heavier surcharge loading and should correlate with more settlement.
-- 'Surcharge_Complete_Date' marks when the major surcharge loading finished.
-- 'Holding_period' is the number of days between 'Surcharge_Complete_Date' and 'Latest_Date'. Longer holding periods typically mean settlement is tapering.
-- 'Asaoka_DOC' is the Degree of Consolidation (%) from the Asaoka Assessment method:
-  - 100% = full consolidation (no further settlement expected),
-  - 90–100% = settlement tapering,
-  - below 90% = ongoing settlement and non-compliance.
-- Compliance criteria:
-  - 'Latest_GL' ≥ 16.9 mCD,
-  - '7day_rate' ≤ 4 mm.
-
-Output Requirements:
+- You will receive a JSON list of settlement plate data relevant to the user query.
+- Provide specific, plate-level insights based on the background domain knowledge, focusing on the consolidation degree, settlement rate, compliance status, and notable trends for each plate.
 - When asked for summaries or overviews, provide a table listing each Settlement Plate’s ID along with raw values for:
   - latest_Settlement,
   - Latest_GL,
   - Latest_Date,
-  - Asaoka_DOC,
-  - Holding_period,
-  - 7day_rate.
+  - DOC,
+  - Asaoka_pred.
 - Do not interpret or comment on the format of the Settlement Plate ID.
-
-Always tailor your response strictly to these parameters.
+- Tailor your response strictly to these parameters.
 ''',
     "reporter_Asaoka": '''
 === FUNCTIONAL INSTRUCTIONS ===
@@ -67,26 +43,10 @@ Always tailor your response strictly to these parameters.
 ''',
     "SM_overview":'''
 === FUNCTIONAL INSTRUCTIONS ===
-You are provided with a JSON list of settlement plates and must answer user queries using the following guidelines:
 
-- Settlement plates measure ground settlement in meters (m), with larger negative values indicating more settlement from baseline elevation due to soil consolidation under surcharge loading.
-- Naming format is 'F3-R03a-SM-01' (region, plate type, index). Do not comment on these IDs.
-- Settlement varies plate-to-plate due to differing soil layers.
-- '7day_rate' is settlement in millimeters over the past 7 days.
-- 'Latest_GL' is ground elevation (mCD); higher values indicate heavier surcharge and more settlement.
-- 'Surcharge_Complete_Date' marks when surcharge loading was completed.
-- 'Holding_period' is days between surcharge completion and latest measurement; longer periods imply more ground treatment and typically less future settlement.
-- 'Asaoka_DOC' (Degree of Consolidation %) indicates:
-  - 100% means full consolidation,
-  - 90–100% indicates tapering settlement,
-  - less than 90% indicates ongoing settlement and non-compliance.
-- Compliance criteria:
-  - 'Latest_GL' ≥ 16.9 mCD,
-  - '7day_rate' ≤ 4 mm.
-- There is an inverse relationship between '7day_rate' and 'Holding_period': larger holding periods usually mean smaller settlement rates.
-
-Output Instructions:
-- When asked for a summary or overview, provide a table listing each Settlement Plate’s ID along with raw values for:
+- You will receive a JSON list of settlement plates relevant to the user query.
+- Provide insights across all plates, highlighting compliance patterns, relationships between holding period and settlement rate, and any anomalies.
+- After the insights, provide a table listing each Settlement Plate’s ID along with raw values for:
   - latest_Settlement,
   - Latest_GL,
   - Latest_Date,
@@ -254,7 +214,25 @@ class LLMRouter:
                     - 1900 settlement plates installed every 1600 sqm to monitor settlement under sand surcharge.
                     - Settlement plates measure ground level changes critical for soil improvement verification.
                     - Compliance criteria include Asaoka DOC > 90%, ground level > 16.9mCD, and settlement rate ≤ 4mm.
-
+                    - Settlement Plates are instruments installed at specific ground locations to monitor the vertical displacement of the soil surface over time, measured in meters (m). Settlement is primarily caused by soil consolidation—a process where soil particles rearrange and compress under an applied load, such as a surcharge. A surcharge load refers to an intentional, temporary addition of weight (commonly sand) placed on the ground surface to accelerate consolidation and improve soil strength before construction.
+                    - Key points to understand about Settlement Plates and their measurements:
+                    -> A more negative settlement value means the ground has lowered more compared to a baseline elevation, indicating greater consolidation.
+                    -> Each Settlement Plate is identified by a unique naming format (e.g., 'F3-R03a-SM-01'), where different parts of the name denote the region, the plate type (Settlement Plate), and a unique index number. These IDs are fixed references and should not be interpreted.
+                    -> Settlement behavior varies from plate to plate because soil layering, composition, and other geotechnical conditions beneath each plate differ, even at the same project site.
+                    -> 'Latest_GL' (Ground Level) indicates the current ground elevation at the plate location, reported in meters above Chart Datum (mCD). A higher 'Latest_GL' means the plate is subjected to more surcharge load and is expected to experience more settlement.
+                    -> 'Surcharge_Complete_Date' is the date when the surcharge loading was completed, marking the start of the primary consolidation phase.
+                    -> 'Holding_period' is the time interval in days between 'Surcharge_Complete_Date' and the most recent measurement date ('Latest_Date'). Longer holding periods generally allow for more consolidation, resulting in reduced ongoing settlement.
+                    -> '7day_rate' measures how much settlement (in millimeters) occurred in the last 7 days. Smaller values indicate settlement is tapering off.
+                    -> The Asaoka Degree of Consolidation (Asaoka_DOC) quantifies consolidation progress as a percentage:
+                    1. 100% means full consolidation, no further settlement expected.
+                    2. 90% to 100% means settlement is tapering.
+                    3. Below 90% indicates ongoing settlement, which is non-compliant with project requirements.
+                    -> Compliance criteria to note:
+                    1. 'Latest_GL' should be at least 16.9 mCD.
+                    2. '7day_rate' should be less than or equal to 4 mm per 7 days.
+                    -> There is generally an inverse relationship between 'Holding_period' and '7day_rate'; longer holding usually means lower settlement rates.
+                    -> When summarizing data, always present raw parameter values for each Settlement Plate: latest settlement, latest ground level, latest measurement date, Asaoka DOC, holding period, and 7-day settlement rate.
+                * Use this domain knowledge to guide your interpretation, analyses, and insights about Settlement Plates data, ensuring accurate, relevant, and contextualized responses.
                 * When the user refers to previous conversation points, respond accordingly using the conversation history.
 '''
             )},
