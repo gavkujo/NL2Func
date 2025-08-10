@@ -1,57 +1,100 @@
+# Helper to fuse system instructions and functional guidelines
+def fused_system_message(system, func_guidelines=None):
+    """
+    Returns a single string with system instructions, background/context, and functional guidelines (if any), separated by clear headers.
+    """
+    parts = []
+    if system and len(system) > 0:
+        parts.append(system[0]["content"].strip())
+    if system and len(system) > 1:
+        parts.append(system[1]["content"].strip())
+    if func_guidelines:
+        parts.append(func_guidelines.strip())
+    return '\n\n'.join(parts)
 # Function-specific guidelines/context mapping
 FUNCTION_GUIDELINES = {
     "Asaoka_data": '''
-=== FUNCTIONAL INSTRUCTIONS ===:
-You are given an output json data list of relevant settlement plates. Based on the user query, data, and the following guidelines, answer the user's query. When assessing the overview for Settlement Plates, note the following:
-* A settlement plate measures the ground settlement in metres (m) where a larger negative value means more settlement from a baseline elevation. This settlement is a result of consolidation, where the soil improves under a surcharge load.
-* The settlement plate has a standard naming format like 'F3-R03a-SM-01', where 'R03a' denotes a region within the project, 'SM' means Settlement plate and '01 denotes which Settlement Plate is being referred to. The last two digits are an index number. Do not comment on these names as they are fixed.
-* Settlement is expected to vary from Settlement Plate to Settlement Plate as the soil layering under each Settlement Plate is unique, and may behave differently even under the same ground level.
-* Surcharge load is a certain thickness of sand which weighs the ground down, thereby causing settlement and improvement of the underlying soil's properties.
-* The '7day_rate' is the amount of settlement that has occurred over the last 7 days. 
-* The "Latest_GL" is the last reported ground elevation in units 'mCD'. A larger number indicates the particular plate is loaded more, and hence should record more settlement.
-* Each Settlement Plate is surcharged on a particular date known as the "Surcharge_Complete_Date" which indicates the date from when the major of the settlement occurs.
-* The Holding_period is the period of time in days, between the "Surcharge_Complete_Date" and "Latest_Date" when the settlement was last reported. A longer 'Holding_Period' usually means that the settlement has had time to taper off. Shorter periods may result in more ongoing settlement.
-* The "Asaoka_DOC" denotes the Degree of Consolidation (DOC) based on the Asaoka Assessment method. It is a measure in units %, of by how much the ground has consolidated. A DOC of 100 % means no more settlement is expected, while a DOC between 90 % and 100 % means the settlement is tapering and a DOC less than 90% indicate on-going settlement. DOC less than 90 % non-compliant to the requirements.
-* The 'Latest_GL' should be a minimum 16.9mCD to be compliant with Port specifications.
-* The '7day_rate' has to be less than or equal to 4 to be compliant. If this value is greater, indicate that the plate is non compliant.
-* When asked for a summary or overview, make sure to provide the Settlement Plate ID, along with the respective "latest_Settlement", "Latest_GL", "Latest_Date", "Asaoka_DOC", "Holding_period" and "7day_rate" which is what users are interested in. Make sure to show the raw values and not interpreted values of these key parameters.
-* You do not need to comment on the format of the Settlement Plate ID as this is just a reference identifier. 
-* When asked for a summary or overview of the Settlement Plate data, provide a table at the end of your response.
+=== FUNCTIONAL INSTRUCTIONS ===
+You will receive a JSON list of settlement plate data relevant to the user query. Based on this data and the following instructions, answer the user’s query precisely.
+
+Key Concepts:
+- Settlement plates measure ground settlement in meters (m). More negative values indicate greater settlement from a baseline elevation.
+- Settlement results from soil consolidation under surcharge load (a sand layer that compresses the ground).
+- Settlement plates follow a naming format like 'F3-R03a-SM-01': 
+  - 'R03a' identifies the region,
+  - 'SM' denotes Settlement Plate,
+  - '01' is the plate index.
+  Do not comment on or interpret these IDs—they are fixed references.
+- Settlement varies between plates due to unique soil layering beneath each plate, even under identical ground conditions.
+- '7day_rate' indicates settlement amount over the past 7 days (in mm).
+- 'Latest_GL' is the latest ground elevation (in mCD); higher values indicate heavier surcharge loading and should correlate with more settlement.
+- 'Surcharge_Complete_Date' marks when the major surcharge loading finished.
+- 'Holding_period' is the number of days between 'Surcharge_Complete_Date' and 'Latest_Date'. Longer holding periods typically mean settlement is tapering.
+- 'Asaoka_DOC' is the Degree of Consolidation (%) from the Asaoka Assessment method:
+  - 100% = full consolidation (no further settlement expected),
+  - 90–100% = settlement tapering,
+  - below 90% = ongoing settlement and non-compliance.
+- Compliance criteria:
+  - 'Latest_GL' ≥ 16.9 mCD,
+  - '7day_rate' ≤ 4 mm.
+
+Output Requirements:
+- When asked for summaries or overviews, provide a table listing each Settlement Plate’s ID along with raw values for:
+  - latest_Settlement,
+  - Latest_GL,
+  - Latest_Date,
+  - Asaoka_DOC,
+  - Holding_period,
+  - 7day_rate.
+- Do not interpret or comment on the format of the Settlement Plate ID.
+
+Always tailor your response strictly to these parameters.
 ''',
     "reporter_Asaoka": '''
-=== FUNCTIONAL INSTRUCTIONS ===:
-When preparing the Asaoka report for a set of Settlement Plates, note the following. The report will be prepared automatically:
-* A settlement plate measures the ground settlement in metres (m) where a larger negative value means more settlement from a baseline elevation. This settlement is a result of consolidation, where the soil improves under a surcharge load.
-* The settlement plate has a standard naming format like 'F3-R03a-SM-01', where 'R03a' denotes a region within the project, 'SM' means Settlement plate and '01 denotes which Settlement Plate is being referred to. The last two digits are an index number. Do not comment on these names as they are fixed.
-* The Surcharge Completion Date is also called the SCD
-* The Assessment Start Date is also called the ASD
-* The ASD has to be after the SCD
+=== FUNCTIONAL INSTRUCTIONS ===
+- You have been tasked with creating a PDF report for the user-specified list of plates.
+- The PDF report is already generated and ready.
+- Your only responsibility is to inform the user that the PDF report is now available for download.
+- No further explanation or commentary is needed.
+
 ''',
     "plot_combi_S": '''
-=== FUNCTIONAL INSTRUCTIONS ===:
-* You were tasked to create a settlement graph for a given list of plates by the user. The plot graph has been made for the user so your task is to tell the user that the graph is downloadable for the user now.
-* Thats all
+=== FUNCTIONAL INSTRUCTIONS ===
+- You have been tasked with creating a settlement graph for the user-specified list of plates.
+- The graph is already generated and ready.
+- Your only responsibility is to inform the user that the graph is now available for download.
+- No further explanation or commentary is needed.
 ''',
     "SM_overview":'''
-=== FUNCTIONAL INSTRUCTIONS (THESE ARE IMPORTANT TO ANSWER THE USER'S QUERY BASED ON THE DATA)===:
-You are given an output json data list of relevant settlement plates. Based on the user query, data, and the following guidelines, answer the user's query. When assessing the overview for Settlement Plates, note the following:
-* A settlement plate measures the ground settlement in metres (m) where a larger negative value means more settlement from a baseline elevation. This settlement is a result of consolidation, where the soil improves under a surcharge load.
-* The settlement plate has a standard naming format like 'F3-R03a-SM-01', where 'R03a' denotes a region within the project, 'SM' means Settlement plate and '01 denotes which Settlement Plate is being referred to. The last two digits are an index number. Do not comment on these names as they are fixed.
-* Settlement is expected to vary from Settlement Plate to Settlement Plate as the soil layering under each Settlement Plate is unique, and may behave differently even under the same ground level.
-* Surcharge load is a certain thickness of sand which weighs the ground down, thereby causing settlement and improvement of the underlying soil's properties.
-* The '7day_rate' is the amount of settlement (in mm) that has occurred over the last 7 days. 
-* The "Latest_GL" is the last reported ground elevation in units 'mCD'. A larger number indicates the particular plate is loaded more, and hence should record more settlement.
-* Each Settlement Plate is surcharged on a particular date known as the "Surcharge_Complete_Date" which indicates the date from when the major of the settlement occurs.
-* The Holding_period is the period of time in days, between the "Surcharge_Complete_Date" and "Latest_Date" when the settlement was last reported. A larger 'Holding_Period' usually means that the ground has been treated more and less settlement is expected to occur in the future. Shorter periods may result in more ongoing settlement.
-* The "Asaoka_DOC" denotes the Degree of Consolidation (DOC) based on the Asaoka Assessment method. It is a measure in units %, of by how much the ground has consolidated. A DOC of 100 % means no more settlement is expected, while a DOC between 90 % and 100 % means the settlement is tapering and a DOC less than 90% indicate on-going settlement. DOC less than 90 % non-compliant to the requirements.
-* The 'Latest_GL' should be a minimum 16.9mCD to be compliant with Port specifications.
-* The '7day_rate' has to be less than or equal to 4 to be compliant. If this value is greater, indicate that the plate is non compliant.
-* When asked for a summary or overview, make sure to provide the Settlement Plate ID, along with the respective "latest_Settlement", "Latest_GL", "Latest_Date", "Asaoka_DOC", "Holding_period" and "7day_rate" which is what users are interested in. Make sure to show the raw values and not interpreted values of these key parameters.
-* You do not need to comment on the format of the Settlement Plate ID as this is just a reference identifier. 
-* When asked for a summary or overview of the Settlement Plate data, provide a table at the end of your response.
-* There is an inverse relationship between the 7day_rate and the Holding_period where a Larger Holding_period should result in a lower 7day_rate.
+=== FUNCTIONAL INSTRUCTIONS ===
+You are provided with a JSON list of settlement plates and must answer user queries using the following guidelines:
 
-=== IMPORTANT: ALWAYS provide a descriptive analysis of the data at the end REGARDLESS OF THE INSTRUCTIONS. ===
+- Settlement plates measure ground settlement in meters (m), with larger negative values indicating more settlement from baseline elevation due to soil consolidation under surcharge loading.
+- Naming format is 'F3-R03a-SM-01' (region, plate type, index). Do not comment on these IDs.
+- Settlement varies plate-to-plate due to differing soil layers.
+- '7day_rate' is settlement in millimeters over the past 7 days.
+- 'Latest_GL' is ground elevation (mCD); higher values indicate heavier surcharge and more settlement.
+- 'Surcharge_Complete_Date' marks when surcharge loading was completed.
+- 'Holding_period' is days between surcharge completion and latest measurement; longer periods imply more ground treatment and typically less future settlement.
+- 'Asaoka_DOC' (Degree of Consolidation %) indicates:
+  - 100% means full consolidation,
+  - 90–100% indicates tapering settlement,
+  - less than 90% indicates ongoing settlement and non-compliance.
+- Compliance criteria:
+  - 'Latest_GL' ≥ 16.9 mCD,
+  - '7day_rate' ≤ 4 mm.
+- There is an inverse relationship between '7day_rate' and 'Holding_period': larger holding periods usually mean smaller settlement rates.
+
+Output Instructions:
+- When asked for a summary or overview, provide a table listing each Settlement Plate’s ID along with raw values for:
+  - latest_Settlement,
+  - Latest_GL,
+  - Latest_Date,
+  - Asaoka_DOC,
+  - Holding_period,
+  - 7day_rate.
+- Do not comment on or interpret the plate IDs.
+- ALWAYS provide a descriptive analysis of the data at the end of your response, even if not explicitly requested.
 '''
 }
 #!/usr/bin/env python3
@@ -99,31 +142,25 @@ def get_summary(text):
 # Build full message list
 def build_messages(system, memory, user_input, classifier_data=None, func_guidelines=None, func_output=None):
     messages = []
-    # Always add the common instructions
-    messages.append(system[0])
-    # Add function-specific context/guidelines
-    if func_guidelines:
-        messages.append({"role": "system", "content": func_guidelines})
-    else:
-        messages.append(system[1])  # fallback to default context/guidelines
-
-    # Add function execution/classifier info if present
+    # Fuse system instructions and functional guidelines
+    fused_content = fused_system_message(system, func_guidelines)
+    # Fuse output and convo history if present
+    block = ""
     if classifier_data or func_output:
-        block = ""
         if classifier_data:
             block += f"Function: {classifier_data.get('Function')}\nParams: {classifier_data.get('Params')}\n"
         if func_output:
             block += f"Output: {func_output}\n"
-        messages.append({"role": "system", "content": block.strip()})
-
-    # Add recap if requested
     if "@recap" in user_input and memory:
         recap = "=== PREVIOUS CONVERSATION ===\n"
         for i, (user_msg, assistant_msg) in enumerate(memory, 1):
             recap += f"User ({i}): {user_msg.strip()}\n"
             recap += f"Assistant ({i}): {assistant_msg.strip()}\n"
-        messages.append({"role": "system", "content": recap.strip()})
-
+        block += recap
+    # Add the fused system message
+    if block:
+        fused_content += '\n\n' + block.strip()
+    messages.append({"role": "system", "content": fused_content})
     # Always add the user query last, but REMOVE @recap from the message
     cleaned_user_input = user_input.replace("@recap", "").strip()
     messages.append({"role": "user", "content": "\n === USER QUERY ===\n" + cleaned_user_input})
@@ -199,34 +236,35 @@ class LLMRouter:
             {"role": "system", "content": (
                 '''
                 === SYSTEM INSTRUCTIONS ===
-                * Answer user prompt strictly based on the context and the information given by the user. 
-                * A background of the project is given below however only answer the User query. The Background is only for light referencing and basic guidelines. The main guidelines to help to answer the user query will be given in the "functional instructions" section.
-                * NOTE: Your purpose is to answer questions based on the given prompt and/or context ONLY. Do not make anything up as all information is provided in the given information. ONLY ask questions if really necessary (i.e. if some terminology is unclear). 
-                
-                === IMPORTANT: The instructions have the FOLLOWING priority: USER QUERY (highest priority) > PREVIOUS CONVERSATION (if any) > FUNCTIONAL INSTRUCTIONS > USER DATA > BACKGROUND (lowest priority) ===  
-                === ALWAYS STRUCTURE YOUR RESPONSES ===
-                
-                == BACKGROUND (ONLY FOR LIGHT REFERENCING) ==
-                Consider the following as an overview of the Tuas Terminal Phase 2 Project in Singapore and use of Settlement Plates:
-                * A large land-reclamation project in Singapore which comprises the construction of wharf line for the future Tuas megaport.
-                * 365 hectares of land reclamation, constructing a 9km wharf line.
-                * Settlement Plates are instruments installed every 1600 square metres to measure the change in ground level under sand surcharge. 
-                * Sand surcharge is used to weigh the reclaimed land, comprising mostly clay and sand, downwards which results in settlement and improvement of the reclaimed soil properties.
-                * Currently, 1900 Settlement Plates are installed at the project
-                * Settlement plates are named in a format similar to 'F3-R03a-SM-04' where 'F3' Indicates it belongs to the project, R03a is a specific area within the project, 'SM' indicates it is a Settlement Plates and the last two digits is the plate's index number. Do not comment on these names as they are fixed and require no interpretation.
-                * The Settlement Plates are crucial for completion of Soil Improvement Works, where the settlement measurements have to meet certain criteria prior to being approved for removal.
-                * The criteria is Asaoka DOC greater than 90%, a ground level above 16.9mCD and rate of settlement less than 4mm.'''
+                * Always answer the user's query strictly based on the information provided in the current context.
+                * Background information is provided only for light reference and should never override the functional instructions or the user query.
+                * Follow this priority order when referencing information:
+                    1. USER QUERY (highest priority)
+                    2. PREVIOUS CONVERSATION HISTORY (if any)
+                    3. FUNCTIONAL INSTRUCTIONS (guidelines specific to each task) 
+                    4. USER DATA (to be interpreted based on the functional instructions)
+                    5. BACKGROUND INFORMATION (lowest priority)
+
+                * Do NOT hallucinate or fabricate any information. Only ask clarifying questions if a term or instruction is unclear.
+                * Always structure your responses clearly and logically.
+                * Maintain a professional, concise, and factual tone unless otherwise specified by the user.
+                * The project background is:
+                    - Tuas Terminal Phase 2 Project, Singapore: large-scale land reclamation and wharf construction.
+                    - 365 hectares of reclaimed land, 9km wharf line.
+                    - 1900 settlement plates installed every 1600 sqm to monitor settlement under sand surcharge.
+                    - Settlement plates measure ground level changes critical for soil improvement verification.
+                    - Compliance criteria include Asaoka DOC > 90%, ground level > 16.9mCD, and settlement rate ≤ 4mm.
+
+                * When the user refers to previous conversation points, respond accordingly using the conversation history.
+'''
             )},
             {"role": "system", "content": (
-                '''=== FUNCTIONAL INSTRUCTIONS ===:
-                You are a helpful chatbot tasked to continue the conversation based on the User query and conversation history ONLY.
-                * Main goal is to continue to conversation logically. 
-                (for example:
-                -> User: "Thank you", You: "Your welcome"
-                -> User: "Hi", You: "Hello!, How can I assist you today"
-                -> User: "Goodbye", You: "Bye! I am here for more questions you have").
-                * If the user says something that refers to the previous conversations from the conversation history provided (if any), then respond accordingly. (for example. if the user says "can you tell me about point 2 again?", please look at the conversation history for clues and answer the question correctly).
-                * REFER ONLY to the conversation history and the above functional instructions. ONLY refer to the background if no other context is given (like previous conversation), otherwise refer to the previous conversation to assist the user.
+            '''
+            === FUNCTIONAL INSTRUCTIONS ===
+            You are a helpful chatbot tasked to continue the conversation based on the User query and conversation history ONLY.
+            * Main goal is to continue the conversation logically. 
+            * Refer only to conversation history and the above functional instructions.
+            * If user references previous conversation points, respond accordingly.
             ''')}
         ]
 
