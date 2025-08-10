@@ -33,26 +33,30 @@ When preparing the Asaoka report for a set of Settlement Plates, note the follow
 * Thats all
 ''',
     "SM_overview":'''
-=== FUNCTIONAL INSTRUCTIONS ===:
+=== FUNCTIONAL INSTRUCTIONS (THESE ARE IMPORTANT TO ANSWER THE USER'S QUERY BASED ON THE DATA)===:
 You are given an output json data list of relevant settlement plates. Based on the user query, data, and the following guidelines, answer the user's query. When assessing the overview for Settlement Plates, note the following:
 * A settlement plate measures the ground settlement in metres (m) where a larger negative value means more settlement from a baseline elevation. This settlement is a result of consolidation, where the soil improves under a surcharge load.
 * The settlement plate has a standard naming format like 'F3-R03a-SM-01', where 'R03a' denotes a region within the project, 'SM' means Settlement plate and '01 denotes which Settlement Plate is being referred to. The last two digits are an index number. Do not comment on these names as they are fixed.
 * Settlement is expected to vary from Settlement Plate to Settlement Plate as the soil layering under each Settlement Plate is unique, and may behave differently even under the same ground level.
 * Surcharge load is a certain thickness of sand which weighs the ground down, thereby causing settlement and improvement of the underlying soil's properties.
-* The '7day_rate' is the amount of settlement that has occurred over the last 7 days. 
+* The '7day_rate' is the amount of settlement (in mm) that has occurred over the last 7 days. 
 * The "Latest_GL" is the last reported ground elevation in units 'mCD'. A larger number indicates the particular plate is loaded more, and hence should record more settlement.
 * Each Settlement Plate is surcharged on a particular date known as the "Surcharge_Complete_Date" which indicates the date from when the major of the settlement occurs.
-* The Holding_period is the period of time in days, between the "Surcharge_Complete_Date" and "Latest_Date" when the settlement was last reported. A longer 'Holding_Period' usually means that the settlement has had time to taper off. Shorter periods may result in more ongoing settlement.
+* The Holding_period is the period of time in days, between the "Surcharge_Complete_Date" and "Latest_Date" when the settlement was last reported. A larger 'Holding_Period' usually means that the ground has been treated more and less settlement is expected to occur in the future. Shorter periods may result in more ongoing settlement.
 * The "Asaoka_DOC" denotes the Degree of Consolidation (DOC) based on the Asaoka Assessment method. It is a measure in units %, of by how much the ground has consolidated. A DOC of 100 % means no more settlement is expected, while a DOC between 90 % and 100 % means the settlement is tapering and a DOC less than 90% indicate on-going settlement. DOC less than 90 % non-compliant to the requirements.
 * The 'Latest_GL' should be a minimum 16.9mCD to be compliant with Port specifications.
 * The '7day_rate' has to be less than or equal to 4 to be compliant. If this value is greater, indicate that the plate is non compliant.
 * When asked for a summary or overview, make sure to provide the Settlement Plate ID, along with the respective "latest_Settlement", "Latest_GL", "Latest_Date", "Asaoka_DOC", "Holding_period" and "7day_rate" which is what users are interested in. Make sure to show the raw values and not interpreted values of these key parameters.
 * You do not need to comment on the format of the Settlement Plate ID as this is just a reference identifier. 
 * When asked for a summary or overview of the Settlement Plate data, provide a table at the end of your response.
+* There is an inverse relationship between the 7day_rate and the Holding_period where a Larger Holding_period should result in a lower 7day_rate.
+
+=== IMPORTANT: ALWAYS provide a descriptive analysis of the data at the end REGARDLESS OF THE INSTRUCTIONS. ===
 '''
 }
 #!/usr/bin/env python3
 import requests
+
 import json
 import time
 import re
@@ -197,7 +201,10 @@ class LLMRouter:
                 === SYSTEM INSTRUCTIONS ===
                 * Answer user prompt strictly based on the context and the information given by the user. 
                 * A background of the project is given below however only answer the User query. The Background is only for light referencing and basic guidelines. The main guidelines to help to answer the user query will be given in the "functional instructions" section.
-                * NOTE: Your purpose is to answer questions based on the given prompt and/or context ONLY. Do not make anything up as all information is provided in the given information. ONLY ask questions if really necessary (i.e. if some terminology is unclear).
+                * NOTE: Your purpose is to answer questions based on the given prompt and/or context ONLY. Do not make anything up as all information is provided in the given information. ONLY ask questions if really necessary (i.e. if some terminology is unclear). 
+                
+                === IMPORTANT: The instructions have the FOLLOWING priority: USER QUERY (highest priority) > PREVIOUS CONVERSATION (if any) > FUNCTIONAL INSTRUCTIONS > USER DATA > BACKGROUND (lowest priority) ===  
+                === ALWAYS STRUCTURE YOUR RESPONSES ===
                 
                 == BACKGROUND (ONLY FOR LIGHT REFERENCING) ==
                 Consider the following as an overview of the Tuas Terminal Phase 2 Project in Singapore and use of Settlement Plates:
@@ -213,9 +220,13 @@ class LLMRouter:
             {"role": "system", "content": (
                 '''=== FUNCTIONAL INSTRUCTIONS ===:
                 You are a helpful chatbot tasked to continue the conversation based on the User query and conversation history ONLY.
-                * Main goal is to continue to conversation logically. (for example: if the user says "Thank you", say "Your welcome").
+                * Main goal is to continue to conversation logically. 
+                (for example:
+                -> User: "Thank you", You: "Your welcome"
+                -> User: "Hi", You: "Hello!, How can I assist you today"
+                -> User: "Goodbye", You: "Bye! I am here for more questions you have").
                 * If the user says something that refers to the previous conversations from the conversation history provided (if any), then respond accordingly. (for example. if the user says "can you tell me about point 2 again?", please look at the conversation history for clues and answer the question correctly).
-                * REFER ONLY to the instructions, background, or conversation history. 
+                * REFER ONLY to the conversation history and the above functional instructions. ONLY refer to the background if no other context is given (like previous conversation), otherwise refer to the previous conversation to assist the user.
             ''')}
         ]
 
@@ -249,7 +260,8 @@ class LLMRouter:
                 yield token
                 response += token
             # After streaming, update memory
-            summary = get_summary(response)
+            #summary = get_summary(response)
+            summary = response
             cleaned_input = cleaned_input.replace("@recap", "").strip()
             self.memory.append((cleaned_input, summary))
             self.memory = self.memory[-self.max_turns:]

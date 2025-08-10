@@ -209,7 +209,15 @@ if given_input:
                     st.session_state.slot_state["slots_needed"] = [e.slot]
                     prompt = f"What's your {e.slot}?"
                     add_message("assistant", prompt)
+                    func = slot_info["func_name"]
                     with st.chat_message("assistant"):
+                        st.markdown(
+                            f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
+                            f"<b>NOTE:</b><br>"
+                            f"<span style='font-size:0.92em; color:#888; font-style:italic;'>The system is trying to call a function: {func}. If you believe that this is not intended, please type 'skip' or similar.</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
                         st.markdown(prompt)
                 else:
                     err_msg = f"Error: {e}"
@@ -254,6 +262,13 @@ if given_input:
                     prompt = f"What's your {e.slot}?"
                     add_message("assistant", prompt)
                     with st.chat_message("assistant"):
+                        st.markdown(
+                            f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
+                            f"<b>NOTE:</b><br>"
+                            f"<span style='font-size:0.92em; color:#888; font-style:italic;'>The system is trying to call a function: {func_name}. If you believe that this is not intended, please type 'skip' or similar.</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
                         st.markdown(prompt)
                 else:
                     print(f"[DEBUG] Exception caught: {e}")
