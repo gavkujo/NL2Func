@@ -1,6 +1,7 @@
 import pyodbc
 import pandas as pd
 import requests
+from datetime import datetime as dt
 
 def SQLconnect(database_name):
     db_server = '172.16.181.2\geobase'
@@ -35,7 +36,7 @@ def S_series(ids: list, max_date=None):
             data.append(int_lst)
     CursorED.close()
     df_S = pd.DataFrame.from_records(data, columns=['id', 'Date', 'Settlement (mm)', 'Ground Level (mCD)', 'Remarks'])
-    df_S['Date'] = pd.to_datetime(df_S['Date'])
+    df_S['Date'] = df_S['Date'].dt.date
     return df_S
 
 def SM_metrics(id: str):

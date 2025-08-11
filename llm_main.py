@@ -82,7 +82,7 @@ except:
 MODEL_CONFIG = {
     "think": "deepseek-r1:1.5b",
     "deep": "deepseek-r1:7b-qwen-distill-q4_K_M",
-    "text": "yi:6b-chat" #gemma:2b
+    "text": "gemma:2b"
 }
 
 # Utility: Remove <think> blocks

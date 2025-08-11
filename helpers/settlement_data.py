@@ -2,7 +2,7 @@ import plotly.graph_objs as go
 import PyPDF2
 from io import BytesIO
 import pandas as pd
-
+from datetime import timedelta
 from helpers.datasources import S_series
 from helpers.data_structures import merge_pdfs_to_bytes
 
@@ -19,10 +19,10 @@ def plot_combi_S(ids, df_S, Y_dtick=500):
                'rgba(205, 127, 50, 1)', 'rgba(127, 255, 212, 1)', 'rgba(210, 105, 30, 1)', 'rgba(128, 128, 128, 1)']
 
     df_S['Settlement (mm)'] = pd.to_numeric(df_S['Settlement (mm)'], errors='coerce')
-    df_S.dropna(subset=['Settlement (mm)'], inplace=True)
+    # df_S.dropna(subset=['Settlement (mm)'], inplace=True)
 
     start_date = min(df_S["Date"])
-    end_date = max(df_S["Date"])
+    end_date = max(df_S["Date"]) + + timedelta(days=15)
 
     traces = []
     for i, id_value in enumerate(ids):
@@ -42,7 +42,6 @@ def plot_combi_S(ids, df_S, Y_dtick=500):
 
     x_axis = dict(
         title='Date',
-        type='date',
         range=[start_date, end_date],
         tickangle=45,
         showline=True,
@@ -67,9 +66,15 @@ def plot_combi_S(ids, df_S, Y_dtick=500):
 
     layout = dict(
         width=1200,
-        height=800,
+        height=600,
         autosize=True,
-        title='Settlement Trend',
+        title=dict(
+            text='Settlement Trend',
+            font=dict(size=16),
+            x=0.5,
+            xanchor='center'
+        ),
+        margin=dict(l=10, r=10, t=30, b=0.1),
         xaxis1=dict(x_axis, **dict(domain=[0, 1], anchor='y1', dtick="M1", showticklabels=True, title='Date')),
         yaxis1=dict(y_axis, **dict(domain=[0.2, 1], anchor='x1', title='Settlement (mm)')),
         plot_bgcolor='rgba(229, 236, 246, 100)'
@@ -81,12 +86,11 @@ def plot_combi_S(ids, df_S, Y_dtick=500):
     fig.update_layout(legend=dict(
         orientation="h",
         yanchor="top",
-        y=0.12,
+        y=0.02,
         xanchor="left",
-        x=0
+        x=0,
     ))
-
-    fig.show()
+    # fig.show()
     pg1 = fig.to_image(format="pdf")
     return pg1
 
@@ -95,9 +99,9 @@ def y_tick_interval(value, multiple):
 
 def reporter_Settlement(ids, max_date, Y_dtick=None):
     df_settlement = S_series(ids, max_date)
-    df_settlement['Date'] = pd.to_datetime(df_settlement['Date']).dt.to_pydatetime()
     if Y_dtick is None:
         Y_dtick = y_tick_interval(abs(max(df_settlement["Settlement (mm)"])), 25)
+
     tmp = BytesIO()
 
     merger = PyPDF2.PdfMerger(fileobj=tmp)

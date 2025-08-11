@@ -286,7 +286,7 @@ def plot_pg_1(id, df_S, df_A, table_S, table_A, SCD, ASD, trendline, Y_dtick=500
         xanchor="left",
         x=0
     ))
-    fig.show()
+
     pg1 = fig.to_image(format="pdf", width=800, height=1124)
     return pg1
 
@@ -336,7 +336,7 @@ def plot_pg_2(id, df_plot):
         xanchor="left",
         x=0
     ))
-    fig.show()
+
     pg2 = fig.to_image(format="pdf", width=800, height=1124)
     return pg2
 
@@ -366,14 +366,13 @@ def reporter_Asaoka(ids, SCD: str, ASD: str, max_date, n=4, asaoka_days=7, dtick
 
             m = round(asaoka_results["m"], 3)
             b = round(asaoka_results["b"], 2)
-            latest_settl = asaoka_results["Latest_Settlement"]
             sf = asaoka_results["Asaoka_pred"]
             equation = f"y = {m}x + {b}"
-            DOC = max(round(latest_settl / sf, 2), 100)
+            DOC = min(round(asaoka_results["DOC"], 2), 100)
             latest_date = asaoka_results["Latest_date"]
             latest_GL = asaoka_results["Latest_GL"]
 
-            DOC_lst.append([id, latest_date, latest_settl, latest_GL, DOC])
+            DOC_lst.append([id, str(str(latest_date)[:10]), str(round(SM_data["Final_S"],2)), str(round(SM_data["GL"], 2)), DOC])
 
             table_S = {
                 "Easting": SM_data["Easting"],
@@ -399,8 +398,7 @@ def reporter_Asaoka(ids, SCD: str, ASD: str, max_date, n=4, asaoka_days=7, dtick
             merger.append(PyPDF2.PdfReader(BytesIO(pg1)))
             merger.append(PyPDF2.PdfReader(BytesIO(pg2)))
 
-        except Exception as e:
-            print(">>> error <<<\n", e)
+        except:
             return None
 
         # except KeyError:
