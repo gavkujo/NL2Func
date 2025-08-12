@@ -11,6 +11,19 @@ from data.parser_test import FunctionClash
 def load_classifier():
     return Classifier()
 
+FUNCTION_DESCRIPTIONS = {
+    "reporter_Asaoka": "Asaoka report generator",
+    "plot_combi_S": "Settlement plotter", 
+    "Asaoka_data": "Asaoka assessment information retriever",
+    "SM_overview": "Settlement overview processor"
+}
+
+def get_function_description(func_name):
+    """Get user-friendly description for function"""
+    text = FUNCTION_DESCRIPTIONS.get(func_name)
+    print("[DEBUG] ", text)
+    return text
+
 def render_assistant_message(msg, func_name=None):
     """
     Render assistant message with <think>...</think> blocks shown first, then the main answer.
@@ -49,6 +62,7 @@ def render_assistant_message(msg, func_name=None):
                     file_name="Combined_settlement_plot.pdf",
                     mime="application/pdf"
                 )
+
 
 # --- Streamlit Chat UI for NL2Func Pipeline ---
 st.set_page_config(page_title="Boskalis GeoChat", layout="wide")
@@ -200,8 +214,10 @@ if given_input:
             if slot_info["slots_needed"]:
                 slot_info["slots_needed"].pop(0)
             try:
-                params = disp.pure_parse(slot_info["aux_ctx"], slot_info["func_name"])
-                out = disp.run_function(slot_info["func_name"], params)
+                description = get_function_description(slot_info["func_name"])
+                with st.spinner(f"Running {description}..."):
+                    params = disp.pure_parse(slot_info["aux_ctx"], slot_info["func_name"])
+                    out = disp.run_function(slot_info["func_name"], params)
                 st.session_state.slot_state = None
                 
                 # Add this check to skip LLM for PDF functions in slot-filling path
@@ -262,8 +278,10 @@ if given_input:
             
             # Execute the function
             try:
-                params = disp.pure_parse(clash_info["tagged_input"], chosen_func)
-                out = disp.run_function(chosen_func, params)
+                description = get_function_description(chosen_func)
+                with st.spinner(f"Running {description}..."):
+                    params = disp.pure_parse(clash_info["tagged_input"], chosen_func)
+                    out = disp.run_function(chosen_func, params)
                 stream_response(clash_info["original_input"], chosen_func, params, out)
             except Exception as e:
                 if hasattr(e, "slot"):
@@ -288,8 +306,10 @@ if given_input:
             
             # Execute the function
             try:
-                params = disp.pure_parse(clash_info["tagged_input"], chosen_func)
-                out = disp.run_function(chosen_func, params)
+                description = get_function_description(chosen_func)
+                with st.spinner(f"Running {description}..."):
+                    params = disp.pure_parse(clash_info["tagged_input"], chosen_func)
+                    out = disp.run_function(chosen_func, params)
                 stream_response(clash_info["original_input"], chosen_func, params, out)
             except Exception as e:
                 if hasattr(e, "slot"):
@@ -317,8 +337,6 @@ if given_input:
             with st.chat_message("assistant"):
                 st.markdown("Please type '1', '2', or 'skip'.")
 
-    # Replace the "Initial classify" section (around line 190) with this:
-
     # --- Initial classify (inject tags here only) ---
     else:
         print("[DEBUG] Tags case active")
@@ -343,8 +361,10 @@ if given_input:
             print("[DEBUG] Final Function: ", func_name)
             if func_name:
                 try:
-                    params = disp.pure_parse(input_text, func_name)
-                    out = disp.run_function(func_name, params)
+                    description = get_function_description(func_name)
+                    with st.spinner(f"Running {description}..."):
+                        params = disp.pure_parse(input_text, func_name)
+                        out = disp.run_function(func_name, params)
                     print("[DEBUG] OUTPUT after running: ", out)
                     stream_response(input_text, func_name, params, out)
                 except Exception as e:
@@ -387,14 +407,16 @@ if given_input:
             # Show clash resolution prompt
             prompt = "I detected a function clash. Which function should I use?"
             add_message("assistant", prompt)
+            description1 = get_function_description(clash.classifier_func)
+            description2 = get_function_description(clash.rule_func)
             with st.chat_message("assistant"):
                 st.markdown(
                     f"<div style='margin-bottom:0.5em; padding:0.5em; background:#fff3cd; border:1px solid #ffeaa7; border-radius:6px;'>"
                     f"<b>⚠️ Function Clash Detected:</b><br>"
-                    f"<span style='font-size:0.92em;'>The classifier suggests <strong>{clash.classifier_func}</strong> but rules suggest <strong>{clash.rule_func}</strong></span><br><br>"
+                    f"<span style='font-size:0.92em;'>The classifier suggests <strong>{description1}</strong> but rules suggest <strong>{description2}</strong></span><br><br>"
                     f"<span style='font-size:0.9em; color:#666;'>Please type one of the following (1/2/skip):</span><br>"
-                    f"<span style='font-size:0.9em;'>• <strong>'1. '</strong> - Use {clash.classifier_func}</span><br>"
-                    f"<span style='font-size:0.9em;'>• <strong>'2. '</strong> - Use {clash.rule_func}</span><br>"
+                    f"<span style='font-size:0.9em;'>• <strong>'1. '</strong> - Use {description1}</span><br>"
+                    f"<span style='font-size:0.9em;'>• <strong>'2. '</strong> - Use {description2}</span><br>"
                     f"<span style='font-size:0.9em;'>• <strong>'skip'</strong> - Send directly to LLM</span>"
                     f"</div>",
                     unsafe_allow_html=True

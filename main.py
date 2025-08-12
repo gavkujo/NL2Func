@@ -38,7 +38,7 @@ def choose_function(raw_query, classifier):
         return None
     elif classifier_func and rule_func and classifier_func != rule_func:
         # Clash: prompt user
-        raise FunctionClash(classifier_func, rule_func)
+        raise FunctionClash(classifier_func, rule_func, raw_query)
     else:
         # Neither found
         return None
