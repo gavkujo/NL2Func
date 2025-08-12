@@ -237,70 +237,78 @@ if given_input:
                     with st.chat_message("assistant"):
                         st.markdown(err_msg)
                     st.session_state.slot_state = None
-
+                    
     # --- Initial classify (inject tags here only) ---
     else:
         print("[DEBUG] Tags case active")
-        tags = []
-        if st.session_state.recap_mode and "@recap" not in input_text:
-            tags.append("@recap")
-        if st.session_state.think_mode and "@think" not in input_text:
-            tags.append("@think")
-        if st.session_state.deep_mode and "@deep" not in input_text:
-            tags.append("@deep")
-        # Remove mutually exclusive tags if both present
-        if st.session_state.think_mode and st.session_state.deep_mode:
-            tags = [t for t in tags if t != "@deep"]  # Prefer think
-        # Prepend tags to input (space-separated)
-        if tags:
-            input_text = " ".join(tags) + " " + input_text
+        
+        # Check if we have a resolved clash from previous interaction
+        if "resolved_clash" in st.session_state:
+            # Use the resolved function and input
+            func_name = st.session_state.resolved_clash["func_name"]
+            input_text = st.session_state.resolved_clash["input_text"]
+            del st.session_state.resolved_clash
+            print(f"[DEBUG] Using resolved clash: {func_name}")
+        else:
+            # Normal flow - add tags and classify
+            tags = []
+            if st.session_state.recap_mode and "@recap" not in input_text:
+                tags.append("@recap")
+            if st.session_state.think_mode and "@think" not in input_text:
+                tags.append("@think")
+            if st.session_state.deep_mode and "@deep" not in input_text:
+                tags.append("@deep")
+            # Remove mutually exclusive tags if both present
+            if st.session_state.think_mode and st.session_state.deep_mode:
+                tags = [t for t in tags if t != "@deep"]  # Prefer think
+            # Prepend tags to input (space-separated)
+            if tags:
+                input_text = " ".join(tags) + " " + input_text
 
-        #func_name, _ = disp.classify(input_text)
-        func_name = choose_function(input_text, st.session_state.classifier)
+            func_name = choose_function(input_text, st.session_state.classifier)
     
-        if isinstance(func_name, tuple):  # If clash, return both names
-            classifier_func, rule_func = func_name
-            
-            # Store the input to prevent re-calling choose_function on rerun
-            if "pending_clash" not in st.session_state:
-                st.session_state.pending_clash = {
-                    "input": input_text,
-                    "classifier": classifier_func, 
-                    "rule": rule_func
-                }
-            
-            # Show the clash resolution UI
-            st.warning("Function clash detected!")
-            
-            col1, col2, col3 = st.columns([1, 1, 1])
-            
-            with col1:
-                st.info(f"**Function 1:**\n{classifier_func}")
-                if st.button(f"Use {classifier_func}", key="classifier_btn"):
-                    func_name = classifier_func
-                    input_text = st.session_state.pending_clash["input"]
-                    del st.session_state.pending_clash
-                    # Don't rerun, just continue processing
-                    
-            with col2:
-                st.info(f"**Function 2:**\n{rule_func}")
-                if st.button(f"Use {rule_func}", key="rule_btn"):
-                    func_name = rule_func
-                    input_text = st.session_state.pending_clash["input"] 
-                    del st.session_state.pending_clash
-                    # Don't rerun, just continue processing
-                    
-            with col3:
-                st.info("**Skip function calling**")
-                if st.button("Send to LLM", key="skip_btn"):
-                    func_name = None
-                    input_text = st.session_state.pending_clash["input"]
-                    del st.session_state.pending_clash
-                    # Don't rerun, just continue processing
-            
-            # If still in clash state, stop processing here
-            if "pending_clash" in st.session_state:
+            if isinstance(func_name, tuple):  # If clash detected
+                classifier_func, rule_func = func_name
+                
+                # Show the clash resolution UI
+                st.warning("⚠️ Function clash detected!")
+                
+                col1, col2, col3 = st.columns([1, 1, 1])
+                
+                with col1:
+                    st.info(f"**Classifier suggests:**\n{classifier_func}")
+                    if st.button(f"Use {classifier_func}", key="classifier_btn"):
+                        # Store the resolution for next run
+                        st.session_state.resolved_clash = {
+                            "func_name": classifier_func,
+                            "input_text": input_text
+                        }
+                        st.rerun()
+                        
+                with col2:
+                    st.info(f"**Rules suggest:**\n{rule_func}")
+                    if st.button(f"Use {rule_func}", key="rule_btn"):
+                        # Store the resolution for next run
+                        st.session_state.resolved_clash = {
+                            "func_name": rule_func,
+                            "input_text": input_text
+                        }
+                        st.rerun()
+                        
+                with col3:
+                    st.info("**Skip function calling**")
+                    if st.button("Send to LLM", key="skip_btn"):
+                        # Store the resolution for next run
+                        st.session_state.resolved_clash = {
+                            "func_name": None,
+                            "input_text": input_text
+                        }
+                        st.rerun()
+                
+                # Stop processing here - wait for user to choose
                 st.stop()
+
+        # Continue with normal function execution logic
         print("[DEBUG] Final Function: ", func_name)
         if func_name:
             try:
