@@ -4,6 +4,11 @@ from llm_main import LLMRouter
 from main import Classifier
 import re
 import os 
+from main import Classifier, choose_function, rule_based_func
+
+@st.cache_resource
+def load_classifier():
+    return Classifier()
 
 def render_assistant_message(msg, func_name=None):
     """
@@ -51,11 +56,18 @@ st.title("Boskalis GeoChat Assistant")
 # --- Sidebar Controls ---
 st.sidebar.markdown("### Controls")
 if st.sidebar.button("🗑️ Clear Chat"):
-    # Clear chat but keep dispatcher
-    disp = st.session_state.get("dispatcher")
-    st.session_state.clear()
-    if disp:
-        st.session_state.dispatcher = disp
+    st.session_state.chat_history = []
+    st.session_state.slot_state = None
+    
+    # Optionally reset modes
+    st.session_state.recap_mode = False
+    st.session_state.think_mode = False
+    st.session_state.deep_mode = False
+    
+    # Clear any pending clash state
+    if "pending_clash" in st.session_state:
+        del st.session_state.pending_clash
+        
     st.rerun()
 
 if "recap_mode" not in st.session_state:
@@ -93,8 +105,8 @@ if "chat_history" not in st.session_state:
 if "slot_state" not in st.session_state:
     st.session_state.slot_state = None
 if "dispatcher" not in st.session_state:
-    st.session_state.classifier = Classifier()
-    st.session_state.llm_router = LLMRouter(max_turns=5)
+    st.session_state.classifier = load_classifier()
+    st.session_state.llm_router = LLMRouter(max_turns=3)
     st.session_state.dispatcher = Dispatcher(
         st.session_state.classifier,
         st.session_state.llm_router
@@ -243,8 +255,53 @@ if given_input:
         if tags:
             input_text = " ".join(tags) + " " + input_text
 
-        func_name, _ = disp.classify(input_text)
-        print("[DEBUG] func_name = ", func_name)
+        #func_name, _ = disp.classify(input_text)
+        func_name = choose_function(input_text, st.session_state.classifier)
+    
+        if isinstance(func_name, tuple):  # If clash, return both names
+            classifier_func, rule_func = func_name
+            
+            # Store the input to prevent re-calling choose_function on rerun
+            if "pending_clash" not in st.session_state:
+                st.session_state.pending_clash = {
+                    "input": input_text,
+                    "classifier": classifier_func, 
+                    "rule": rule_func
+                }
+            
+            # Show the clash resolution UI
+            st.warning("Function clash detected!")
+            
+            col1, col2, col3 = st.columns([1, 1, 1])
+            
+            with col1:
+                st.info(f"**Function 1:**\n{classifier_func}")
+                if st.button(f"Use {classifier_func}", key="classifier_btn"):
+                    func_name = classifier_func
+                    input_text = st.session_state.pending_clash["input"]
+                    del st.session_state.pending_clash
+                    # Don't rerun, just continue processing
+                    
+            with col2:
+                st.info(f"**Function 2:**\n{rule_func}")
+                if st.button(f"Use {rule_func}", key="rule_btn"):
+                    func_name = rule_func
+                    input_text = st.session_state.pending_clash["input"] 
+                    del st.session_state.pending_clash
+                    # Don't rerun, just continue processing
+                    
+            with col3:
+                st.info("**Skip function calling**")
+                if st.button("Send to LLM", key="skip_btn"):
+                    func_name = None
+                    input_text = st.session_state.pending_clash["input"]
+                    del st.session_state.pending_clash
+                    # Don't rerun, just continue processing
+            
+            # If still in clash state, stop processing here
+            if "pending_clash" in st.session_state:
+                st.stop()
+        print("[DEBUG] Final Function: ", func_name)
         if func_name:
             try:
                 params = disp.pure_parse(input_text, func_name)

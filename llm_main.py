@@ -1,3 +1,45 @@
+#!/usr/bin/env python3
+import requests
+import functools
+import json
+import time
+import re
+
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+
+
+# Save locally for conversion
+try:
+    tokenizer = T5Tokenizer.from_pretrained("./t5-small")
+    model = T5ForConditionalGeneration.from_pretrained("./t5-small")
+except:
+    tokenizer = T5Tokenizer.from_pretrained("t5-small")
+    model = T5ForConditionalGeneration.from_pretrained("t5-small")
+    model.save_pretrained("./t5-small")
+    tokenizer.save_pretrained("./t5-small")
+
+
+# Configuration
+MODEL_CONFIG = {
+    "think": "deepseek-r1:1.5b",
+    "deep": "deepseek-r1:7b-qwen-distill-q4_K_M",
+    "text": "gemma:2b"
+}
+
+# Utility: Remove <think> blocks
+def strip_think(text: str) -> str:
+    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+def get_summary(text):
+    print(f"[Debug][Summarizer] Input length: {len(text)} chars")
+    input_text = "lightly summarize the following text: " + text
+    inputs = tokenizer(input_text, return_tensors="pt", max_length=2048, truncation=True)
+    outputs = model.generate(**inputs, max_length=1024, min_length=30, length_penalty=1.0, num_beams=4, early_stopping=True)
+    summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    print(f"[Debug][Summarizer] Summary length: {len(summary)} chars")
+    print(f"[Debug][Summarizer] Summary preview: {summary[:100]}...")
+    return summary
+
 # Helper to fuse system instructions and functional guidelines
 def fused_system_message(system, func_guidelines=None):
     """
@@ -11,6 +53,7 @@ def fused_system_message(system, func_guidelines=None):
     if func_guidelines:
         parts.append(func_guidelines.strip())
     return '\n\n'.join(parts)
+
 # Function-specific guidelines/context mapping
 FUNCTION_GUIDELINES = {
     "Asaoka_data": '''
@@ -57,47 +100,6 @@ FUNCTION_GUIDELINES = {
 - ALWAYS provide a descriptive analysis of the data at the end of your response, even if not explicitly requested.
 '''
 }
-#!/usr/bin/env python3
-import requests
-
-import json
-import time
-import re
-
-from transformers import T5Tokenizer, T5ForConditionalGeneration
-
-
-# Save locally for conversion
-try:
-    tokenizer = T5Tokenizer.from_pretrained("./t5-small")
-    model = T5ForConditionalGeneration.from_pretrained("./t5-small")
-except:
-    tokenizer = T5Tokenizer.from_pretrained("t5-small")
-    model = T5ForConditionalGeneration.from_pretrained("t5-small")
-    model.save_pretrained("./t5-small")
-    tokenizer.save_pretrained("./t5-small")
-
-
-# Configuration
-MODEL_CONFIG = {
-    "think": "deepseek-r1:1.5b",
-    "deep": "deepseek-r1:7b-qwen-distill-q4_K_M",
-    "text": "gemma:2b"
-}
-
-# Utility: Remove <think> blocks
-def strip_think(text: str) -> str:
-    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-
-def get_summary(text):
-    print(f"[Debug][Summarizer] Input length: {len(text)} chars")
-    input_text = "lightly summarize the following text: " + text
-    inputs = tokenizer(input_text, return_tensors="pt", max_length=2048, truncation=True)
-    outputs = model.generate(**inputs, max_length=1024, min_length=30, length_penalty=2.0, num_beams=4, early_stopping=True)
-    summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    print(f"[Debug][Summarizer] Summary length: {len(summary)} chars")
-    print(f"[Debug][Summarizer] Summary preview: {summary[:100]}...")
-    return summary
 
 # Build full message list
 def build_messages(system, memory, user_input, classifier_data=None, func_guidelines=None, func_output=None):
@@ -147,19 +149,26 @@ def warmup_model(model: str):
         print(f"[Error] Warm-up failed: {e}")
 
 # Streaming helper
-def ollama_stream(messages: list, model: str):
-    url = "http://localhost:11434/v1/chat/completions"
-    headers = {
+@functools.lru_cache(maxsize=3)
+def get_cached_model_session(model_name: str):
+    """Cache model sessions to avoid repeated loading"""
+    session = requests.Session()
+    session.headers.update({
         "Content-Type": "application/json",
         "Authorization": "Bearer ollama"
-    }
+    })
+    # Keep persistent connections per model
+    return session
+def ollama_stream(messages: list, model: str):
+    session = get_cached_model_session(model)
+    url = "http://localhost:11434/v1/chat/completions"
     payload = {
         "model": model,
         "messages": messages,
         "stream": True
     }
 
-    with requests.post(url, headers=headers, json=payload, stream=True) as resp:
+    with session.post(url, json=payload, stream=True) as resp:
         resp.raise_for_status()
         for raw_line in resp.iter_lines(decode_unicode=True):
             if not raw_line or not raw_line.startswith("data:"):
@@ -186,8 +195,8 @@ def select_model(prompt: str) -> str:
 
 # ===== Main LLM Router =====
 class LLMRouter:
-    def __init__(self, max_turns=5):
-        self.memory = []  # [(user_msg, assistant_msg)]
+    def __init__(self, max_turns=3):
+        self.memory = []  # [(user_msg, assistant_msg, summary_level)]
         self.max_turns = max_turns
         self.warmed_up_models = set()
 
@@ -250,6 +259,39 @@ class LLMRouter:
         #warmup_model(MODEL_CONFIG["text"])
         self.warmed_up_models.add(MODEL_CONFIG["text"])
 
+    def _summarize_pair(self, user_msg, assistant_msg):
+        """Summarize a user-assistant conversation pair"""
+        summarized_user = "User input: " + get_summary(f"User: {user_msg}")
+        summarized_response = "Assistant response: " + get_summary(f"Assistant: {assistant_msg}")
+        return summarized_user, summarized_response
+    
+    def _update_memory_hierarchical(self, new_user_input, new_response):
+        """True progressive hierarchical memory - independent of max_turns"""
+        
+        # Step 1: Add new conversation at the front
+        self.memory.insert(0, (new_user_input, new_response, 0))
+        
+        # Step 2: Progressive summarization - move each old item up one level
+        updated_memory = [(new_user_input, new_response, 0)]  # Keep newest as-is
+        
+        for user_msg, assistant_msg, level in self.memory[1:]:  # Skip the newest we just added
+            # Summarize and increase level for ALL older conversations
+            summ_user, summ_assistant = self._summarize_pair(user_msg, assistant_msg)
+            updated_memory.append((summ_user, summ_assistant, level + 1))
+        
+        # Step 3: Apply max_turns limit AFTER progressive summarization
+        self.memory = updated_memory[:self.max_turns]
+
+    def debug_memory_structure(self):
+        """Debug method to visualize memory structure"""
+        print("\n=== MEMORY STRUCTURE ===")
+        for i, (user_msg, assistant_msg, level) in enumerate(self.memory):
+            indent = "  " * level
+            print(f"{indent}Entry {i} (Level {level}):")
+            print(f"{indent}  User: {user_msg[:60]}...")
+            print(f"{indent}  Assistant: {assistant_msg[:60]}...")
+        print("========================\n")
+
 
     def handle_user(self, user_input: str, func_name=None, classifier_data=None, func_output=None, stream=False):
         cleaned_input = strip_think(user_input)
@@ -259,15 +301,17 @@ class LLMRouter:
             self.warmed_up_models.add(model)
 
         func_guidelines = FUNCTION_GUIDELINES.get(func_name)
+        memory_for_messages = [(item[0], item[1]) for item in self.memory]
         messages = build_messages(
             self.system_messages,
-            self.memory,
+            memory_for_messages,
             cleaned_input,
             classifier_data=classifier_data,
             func_guidelines=func_guidelines,
             func_output=func_output
         )
-        print("FINAL MESSAGE \n", messages)
+        print(f"[DEBUG] Memory structure: {[(f'L{item[2]}', item[0][:30]+'...') for item in self.memory]}")
+        print("[DEBUG] FINAL MESSAGE \n", messages)
 
         if stream:
             # Streaming mode: yield tokens as they arrive
@@ -276,11 +320,12 @@ class LLMRouter:
                 yield token
                 response += token
             # After streaming, update memory
-            #summary = get_summary(response)
-            summary = response
+            # summary = get_summary(response)
+            # summary = response
             cleaned_input = cleaned_input.replace("@recap", "").strip()
-            self.memory.append((cleaned_input, summary))
-            self.memory = self.memory[-self.max_turns:]
+            self._update_memory_hierarchical(cleaned_input, response)
+            # self.memory.append((cleaned_input, summary))
+            # self.memory = self.memory[-self.max_turns:]
         else:
             # Non-streaming mode: collect all tokens, then return
             response = ""

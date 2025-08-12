@@ -1,5 +1,3 @@
-
-from dispatcher import Dispatcher
 from llm_main import LLMRouter
 import sys
 import os
@@ -8,13 +6,59 @@ from infer import greedy_decode, MiniTransformer
 import torch
 import sentencepiece as spm
 
+RULE_KEYWORDS = {
+        "SM_overview": ["overview", "analysis", "summary", "multiple plates", "all plates"],
+        "reporter_Asaoka": ["pdf report", "settlement report", "status report", "generate pdf", "document"],
+        "plot_combi_S": ["plot", "graph", "combined plot", "visualize", "chart"],
+        "Asaoka_data": ["asaoka", "assessment", "prediction", "single plate", "settlement value"],
+    }
+
+def rule_based_func(raw_query):
+    query = raw_query.lower()
+    for func, keywords in RULE_KEYWORDS.items():
+        for kw in keywords:
+            if kw in query:
+                return func
+    return None
+
+def choose_function(raw_query, classifier):
+    classifier_func, _ = classifier.classify(raw_query)
+    rule_func = rule_based_func(raw_query)
+
+    # Decision logic
+    if classifier_func == rule_func:
+        # Both agree or both None
+        return classifier_func
+    elif classifier_func and not rule_func:
+        # Only classifier found
+        return classifier_func
+    elif not classifier_func and rule_func:
+        # Only rule found
+        return None
+    elif classifier_func and rule_func and classifier_func != rule_func:
+        # Clash: prompt user
+        return (classifier_func, rule_func)
+    else:
+        # Neither found
+        return None
+
 class Classifier:
+    _model_cache = {}
     def __init__(self):
         # Load model and tokenizer once for efficiency
         self.tokenizer_path = 'tokenizer/tokenizer.model'
         self.model_path = 'saved/best_model.pt'
         self.max_len = 512
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Use cached model if available
+        cache_key = f"{self.model_path}_{self.device}"
+        if cache_key in self._model_cache:
+            self.sp, self.model = self._model_cache[cache_key]
+        else:
+            self._load_model()
+            self._model_cache[cache_key] = (self.sp, self.model)
+    
+    def _load_model(self):
         self.sp = spm.SentencePieceProcessor()
         self.sp.Load(self.tokenizer_path)
         checkpoint = torch.load(self.model_path, map_location=self.device)
@@ -56,6 +100,7 @@ class Classifier:
         return None, None
 
 if __name__ == "__main__":
+    from dispatcher import Dispatcher
     router = LLMRouter(max_turns=3)
     classifier = Classifier()
     disp = Dispatcher(classifier, router)

@@ -1,6 +1,7 @@
 from data.parser_test import parse_and_build, MissingSlot  # refactored for pure parsing!
 from llm_main import LLMRouter
 import functions
+from main import choose_function
 
 
 class Dispatcher:
@@ -9,7 +10,21 @@ class Dispatcher:
         self.llm_router = llm_router
 
     def classify(self, raw_query):
-        return self.classifier.classify(raw_query)
+        result = choose_function(raw_query, self.classifier)
+        if isinstance(result, tuple):
+            classifier_func, rule_func = result
+            print(f"System detected a possible function clash.")
+            print(f"1. {classifier_func} (Classifier)")
+            print(f"2. {rule_func} (Rule-based)")
+            choice = input("Choose which function to run (type 1 or 2): ").strip()
+            if choice == "1":
+                return classifier_func, classifier_func
+            elif choice == "2":
+                return rule_func, rule_func
+            else:
+                print("Invalid choice, defaulting to classifier output.")
+                return classifier_func, classifier_func
+        return result, result
 
     def pure_parse(self, raw_query, func_name):
         try:
