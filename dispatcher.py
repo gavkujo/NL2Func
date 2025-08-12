@@ -1,7 +1,7 @@
 from data.parser_test import parse_and_build, MissingSlot  # refactored for pure parsing!
 from llm_main import LLMRouter
 import functions
-from main import choose_function
+from main import choose_function, rule_based_func
 
 
 class Dispatcher:

@@ -3,6 +3,7 @@ import sys
 import os
 import json
 from infer import greedy_decode, MiniTransformer
+from data.parser_test import FunctionClash
 import torch
 import sentencepiece as spm
 
@@ -37,7 +38,7 @@ def choose_function(raw_query, classifier):
         return None
     elif classifier_func and rule_func and classifier_func != rule_func:
         # Clash: prompt user
-        return (classifier_func, rule_func)
+        raise FunctionClash(classifier_func, rule_func)
     else:
         # Neither found
         return None

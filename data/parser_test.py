@@ -36,6 +36,14 @@ class MissingSlot(Exception):
     def __init__(self, slot):
         self.slot = slot
 
+class FunctionClash(Exception):
+    """Exception raised when there's a function classification clash"""
+    def __init__(self, classifier_func, rule_func, original_input):
+        self.classifier_func = classifier_func
+        self.rule_func = rule_func
+        self.original_input = original_input
+        super().__init__(f"Function clash: {classifier_func} vs {rule_func}")
+
 def find_plates(text):
     """Extract plate IDs as list."""
     return re.findall(PLATE_REGEX, text)

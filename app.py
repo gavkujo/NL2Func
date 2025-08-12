@@ -5,6 +5,7 @@ from main import Classifier
 import re
 import os 
 from main import Classifier, choose_function, rule_based_func
+from data.parser_test import FunctionClash
 
 @st.cache_resource
 def load_classifier():
@@ -65,9 +66,9 @@ if st.sidebar.button("🗑️ Clear Chat"):
     st.session_state.deep_mode = False
     
     # Clear clash resolution state
-    if "clash_resolution" in st.session_state:
-        del st.session_state.clash_resolution
-        
+    if "clash_state" in st.session_state:
+        del st.session_state.clash_state
+
     st.rerun()
 
 if "recap_mode" not in st.session_state:
@@ -238,113 +239,164 @@ if given_input:
                         st.markdown(err_msg)
                     st.session_state.slot_state = None
 
+    # Add this right after line 156 (after the slot-filling section):
+
+    # --- Handle clash resolution ---
+    elif "clash_state" in st.session_state:
+        print("[DEBUG] Clash State active")
+        clash_info = st.session_state.clash_state
+        answer = input_text.lower().strip()
+        
+        add_message("user", input_text)
+        with st.chat_message("user"):
+            st.markdown(input_text)
+        
+        # Simple choices: 1, 2, or skip
+        if answer in {"1"}:
+            chosen_func = clash_info["classifier_func"]
+            del st.session_state.clash_state
+            
+            add_message("assistant", f"Using: {chosen_func}")
+            with st.chat_message("assistant"):
+                st.markdown(f"Using: {chosen_func}")
+            
+            # Execute the function
+            try:
+                params = disp.pure_parse(clash_info["tagged_input"], chosen_func)
+                out = disp.run_function(chosen_func, params)
+                stream_response(clash_info["original_input"], chosen_func, params, out)
+            except Exception as e:
+                if hasattr(e, "slot"):
+                    st.session_state.slot_state = {
+                        "func_name": chosen_func,
+                        "aux_ctx": clash_info["tagged_input"],
+                        "slots_needed": [e.slot],
+                        "orig_query": clash_info["original_input"]
+                    }
+                    prompt = f"What's your {e.slot}?"
+                    add_message("assistant", prompt)
+                    with st.chat_message("assistant"):
+                        st.markdown(prompt)
+                        
+        elif answer in {"2"}:
+            chosen_func = clash_info["rule_func"]
+            del st.session_state.clash_state
+            
+            add_message("assistant", f"Using: {chosen_func}")
+            with st.chat_message("assistant"):
+                st.markdown(f"Using: {chosen_func}")
+            
+            # Execute the function
+            try:
+                params = disp.pure_parse(clash_info["tagged_input"], chosen_func)
+                out = disp.run_function(chosen_func, params)
+                stream_response(clash_info["original_input"], chosen_func, params, out)
+            except Exception as e:
+                if hasattr(e, "slot"):
+                    st.session_state.slot_state = {
+                        "func_name": chosen_func,
+                        "aux_ctx": clash_info["tagged_input"],
+                        "slots_needed": [e.slot],
+                        "orig_query": clash_info["original_input"]
+                    }
+                    prompt = f"What's your {e.slot}?"
+                    add_message("assistant", prompt)
+                    with st.chat_message("assistant"):
+                        st.markdown(prompt)
+                        
+        elif answer in {"skip"}:
+            del st.session_state.clash_state
+            add_message("assistant", "Skipping function; sending to LLM.")
+            with st.chat_message("assistant"):
+                st.markdown("Skipping function; sending to LLM.")
+            stream_response(clash_info["original_input"])
+            
+        else:
+            # Invalid choice - ask again
+            add_message("assistant", "Please type '1', '2', or 'skip'.")
+            with st.chat_message("assistant"):
+                st.markdown("Please type '1', '2', or 'skip'.")
+
     # Replace the "Initial classify" section (around line 190) with this:
 
     # --- Initial classify (inject tags here only) ---
     else:
         print("[DEBUG] Tags case active")
-        
-        # Check if we're in the middle of a clash resolution
-        if "clash_resolution" in st.session_state:
-            # We're in clash resolution mode - use stored data
-            input_text = st.session_state.clash_resolution["input_text"]
-            classifier_func = st.session_state.clash_resolution["classifier_func"]
-            rule_func = st.session_state.clash_resolution["rule_func"]
-            
-            # Show the clash resolution UI
-            st.warning("⚠️ Function clash detected!")
-            
-            col1, col2, col3 = st.columns([1, 1, 1])
-            
-            func_name = None
-            
-            with col1:
-                st.info(f"**Classifier suggests:**\n{classifier_func}")
-                if st.button(f"Use {classifier_func}", key="classifier_btn"):
-                    func_name = classifier_func
-                    del st.session_state.clash_resolution
-                    
-            with col2:
-                st.info(f"**Rules suggest:**\n{rule_func}")
-                if st.button(f"Use {rule_func}", key="rule_btn"):
-                    func_name = rule_func
-                    del st.session_state.clash_resolution
-                    
-            with col3:
-                st.info("**Skip function calling**")
-                if st.button("Send to LLM", key="skip_btn"):
-                    func_name = None
-                    del st.session_state.clash_resolution
-            
-            # If no button was clicked, stop here
-            if func_name is None and "clash_resolution" in st.session_state:
-                st.info("👆 Please choose how to proceed above")
-                st.stop()
-                
-        else:
-            # Normal flow - add tags and classify
-            tags = []
-            if st.session_state.recap_mode and "@recap" not in input_text:
-                tags.append("@recap")
-            if st.session_state.think_mode and "@think" not in input_text:
-                tags.append("@think")
-            if st.session_state.deep_mode and "@deep" not in input_text:
-                tags.append("@deep")
-            # Remove mutually exclusive tags if both present
-            if st.session_state.think_mode and st.session_state.deep_mode:
-                tags = [t for t in tags if t != "@deep"]  # Prefer think
-            # Prepend tags to input (space-separated)
-            if tags:
-                input_text = " ".join(tags) + " " + input_text
+        # Normal flow - add tags and classify
+        tags = []
+        if st.session_state.recap_mode and "@recap" not in input_text:
+            tags.append("@recap")
+        if st.session_state.think_mode and "@think" not in input_text:
+            tags.append("@think")
+        if st.session_state.deep_mode and "@deep" not in input_text:
+            tags.append("@deep")
+        # Remove mutually exclusive tags if both present
+        if st.session_state.think_mode and st.session_state.deep_mode:
+            tags = [t for t in tags if t != "@deep"]  # Prefer think
+        # Prepend tags to input (space-separated)
+        if tags:
+            input_text = " ".join(tags) + " " + input_text
 
+        try: 
             func_name = choose_function(input_text, st.session_state.classifier)
-
-            if isinstance(func_name, tuple):  # If clash detected
-                classifier_func, rule_func = func_name
-                
-                # Store clash information for next run
-                st.session_state.clash_resolution = {
-                    "input_text": input_text,
-                    "classifier_func": classifier_func,
-                    "rule_func": rule_func
-                }
-                
-                # Force a rerun to show the clash UI
-                st.rerun()
-
         # Continue with normal function execution logic
-        print("[DEBUG] Final Function: ", func_name)
-        if func_name:
-            try:
-                params = disp.pure_parse(input_text, func_name)
-                out = disp.run_function(func_name, params)
-                print("[DEBUG] OUTPUT after running: ", out)
-                stream_response(input_text, func_name, params, out)
-            except Exception as e:
-                if hasattr(e, "slot"):
-                    st.session_state.slot_state = {
-                        "func_name": func_name,
-                        "aux_ctx": input_text,
-                        "slots_needed": [e.slot],
-                        "orig_query": input_text
-                    }
-                    prompt = f"What's your {e.slot}?"
-                    add_message("assistant", prompt)
-                    with st.chat_message("assistant"):
-                        st.markdown(
-                            f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
-                            f"<b>NOTE:</b><br>"
-                            f"<span style='font-size:0.92em; color:#888; font-style:italic;'>The system is trying to call a function: {func_name}. If you believe that this is not intended, please type 'skip' or similar.</span>"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(prompt)
-                else:
-                    print(f"[DEBUG] Exception caught: {e}")
-                    err_msg = f"Error: {e}"
-                    add_message("assistant", err_msg)
-                    with st.chat_message("assistant"):
-                        st.markdown(err_msg)
-        else:
-            print("[DEBUG] Function calling skipped")
-            stream_response(input_text)
+            print("[DEBUG] Final Function: ", func_name)
+            if func_name:
+                try:
+                    params = disp.pure_parse(input_text, func_name)
+                    out = disp.run_function(func_name, params)
+                    print("[DEBUG] OUTPUT after running: ", out)
+                    stream_response(input_text, func_name, params, out)
+                except Exception as e:
+                    if hasattr(e, "slot"):
+                        st.session_state.slot_state = {
+                            "func_name": func_name,
+                            "aux_ctx": input_text,
+                            "slots_needed": [e.slot],
+                            "orig_query": input_text
+                        }
+                        prompt = f"What's your {e.slot}?"
+                        add_message("assistant", prompt)
+                        with st.chat_message("assistant"):
+                            st.markdown(
+                                f"<div style='margin-bottom:0.5em; padding:0.5em; background:#f6f6f6; border-radius:6px;'>"
+                                f"<b>NOTE:</b><br>"
+                                f"<span style='font-size:0.92em; color:#888; font-style:italic;'>The system is trying to call a function: {func_name}. If you believe that this is not intended, please type 'skip' or similar.</span>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+                            st.markdown(prompt)
+                    else:
+                        print(f"[DEBUG] Exception caught: {e}")
+                        err_msg = f"Error: {e}"
+                        add_message("assistant", err_msg)
+                        with st.chat_message("assistant"):
+                            st.markdown(err_msg)
+            else:
+                print("[DEBUG] Function calling skipped")
+                stream_response(input_text)
+        except FunctionClash as clash:
+            # Handle function clash like missing slot
+            st.session_state.clash_state = {
+                "classifier_func": clash.classifier_func,
+                "rule_func": clash.rule_func,
+                "original_input": clash.original_input,
+                "tagged_input": input_text  # Store the input with tags
+            }
+            
+            # Show clash resolution prompt
+            prompt = "I detected a function clash. Which function should I use?"
+            add_message("assistant", prompt)
+            with st.chat_message("assistant"):
+                st.markdown(
+                    f"<div style='margin-bottom:0.5em; padding:0.5em; background:#fff3cd; border:1px solid #ffeaa7; border-radius:6px;'>"
+                    f"<b>⚠️ Function Clash Detected:</b><br>"
+                    f"<span style='font-size:0.92em;'>The classifier suggests <strong>{clash.classifier_func}</strong> but rules suggest <strong>{clash.rule_func}</strong></span><br><br>"
+                    f"<span style='font-size:0.9em; color:#666;'>Please type one of the following (1/2/skip):</span><br>"
+                    f"<span style='font-size:0.9em;'>• <strong>'1. '</strong> - Use {clash.classifier_func}</span><br>"
+                    f"<span style='font-size:0.9em;'>• <strong>'2. '</strong> - Use {clash.rule_func}</span><br>"
+                    f"<span style='font-size:0.9em;'>• <strong>'skip'</strong> - Send directly to LLM</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(prompt)
