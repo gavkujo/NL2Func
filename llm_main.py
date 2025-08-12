@@ -319,6 +319,7 @@ class LLMRouter:
             for token in ollama_stream(messages, model):
                 yield token
                 response += token
+            response = strip_think(response)
             # After streaming, update memory
             # summary = get_summary(response)
             # summary = response
@@ -328,13 +329,14 @@ class LLMRouter:
             # self.memory = self.memory[-self.max_turns:]
         else:
             # Non-streaming mode: collect all tokens, then return
-            response = ""
-            for token in ollama_stream(messages, model):
-                response += token
-            summary = get_summary(response)
-            self.memory.append((cleaned_input, summary))
-            self.memory = self.memory[-self.max_turns:]
-            return response
+            #    response = ""
+            #   for token in ollama_stream(messages, model):
+            #      response += token
+            #    summary = get_summary(response)
+            #    self.memory.append((cleaned_input, summary))
+            #    self.memory = self.memory[-self.max_turns:]
+            #    return response
+            pass
     
 
 
