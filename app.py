@@ -64,9 +64,9 @@ if st.sidebar.button("🗑️ Clear Chat"):
     st.session_state.think_mode = False
     st.session_state.deep_mode = False
     
-    # Clear any pending clash state
-    if "pending_clash" in st.session_state:
-        del st.session_state.pending_clash
+    # Clear clash resolution state
+    if "clash_resolution" in st.session_state:
+        del st.session_state.clash_resolution
         
     st.rerun()
 
@@ -238,60 +238,79 @@ if given_input:
                         st.markdown(err_msg)
                     st.session_state.slot_state = None
 
+    # Replace the "Initial classify" section (around line 190) with this:
+
     # --- Initial classify (inject tags here only) ---
     else:
         print("[DEBUG] Tags case active")
         
-        # Normal flow - add tags and classify
-        tags = []
-        if st.session_state.recap_mode and "@recap" not in input_text:
-            tags.append("@recap")
-        if st.session_state.think_mode and "@think" not in input_text:
-            tags.append("@think")
-        if st.session_state.deep_mode and "@deep" not in input_text:
-            tags.append("@deep")
-        # Remove mutually exclusive tags if both present
-        if st.session_state.think_mode and st.session_state.deep_mode:
-            tags = [t for t in tags if t != "@deep"]  # Prefer think
-        # Prepend tags to input (space-separated)
-        if tags:
-            input_text = " ".join(tags) + " " + input_text
-
-        func_name = choose_function(input_text, st.session_state.classifier)
-
-        if isinstance(func_name, tuple):  # If clash detected
-            classifier_func, rule_func = func_name
+        # Check if we're in the middle of a clash resolution
+        if "clash_resolution" in st.session_state:
+            # We're in clash resolution mode - use stored data
+            input_text = st.session_state.clash_resolution["input_text"]
+            classifier_func = st.session_state.clash_resolution["classifier_func"]
+            rule_func = st.session_state.clash_resolution["rule_func"]
             
-            # Show the clash resolution UI and wait for choice
+            # Show the clash resolution UI
             st.warning("⚠️ Function clash detected!")
             
             col1, col2, col3 = st.columns([1, 1, 1])
             
-            chosen_func = None
+            func_name = None
             
             with col1:
                 st.info(f"**Classifier suggests:**\n{classifier_func}")
                 if st.button(f"Use {classifier_func}", key="classifier_btn"):
-                    chosen_func = classifier_func
+                    func_name = classifier_func
+                    del st.session_state.clash_resolution
                     
             with col2:
                 st.info(f"**Rules suggest:**\n{rule_func}")
                 if st.button(f"Use {rule_func}", key="rule_btn"):
-                    chosen_func = rule_func
+                    func_name = rule_func
+                    del st.session_state.clash_resolution
                     
             with col3:
                 st.info("**Skip function calling**")
                 if st.button("Send to LLM", key="skip_btn"):
-                    chosen_func = None
+                    func_name = None
+                    del st.session_state.clash_resolution
             
-            # If a button was clicked, continue with that choice
-            if chosen_func is not None:
-                func_name = chosen_func
-                print(f"[DEBUG] User chose: {func_name}")
-            else:
-                # No button clicked yet, stop here and wait
+            # If no button was clicked, stop here
+            if func_name is None and "clash_resolution" in st.session_state:
                 st.info("👆 Please choose how to proceed above")
                 st.stop()
+                
+        else:
+            # Normal flow - add tags and classify
+            tags = []
+            if st.session_state.recap_mode and "@recap" not in input_text:
+                tags.append("@recap")
+            if st.session_state.think_mode and "@think" not in input_text:
+                tags.append("@think")
+            if st.session_state.deep_mode and "@deep" not in input_text:
+                tags.append("@deep")
+            # Remove mutually exclusive tags if both present
+            if st.session_state.think_mode and st.session_state.deep_mode:
+                tags = [t for t in tags if t != "@deep"]  # Prefer think
+            # Prepend tags to input (space-separated)
+            if tags:
+                input_text = " ".join(tags) + " " + input_text
+
+            func_name = choose_function(input_text, st.session_state.classifier)
+
+            if isinstance(func_name, tuple):  # If clash detected
+                classifier_func, rule_func = func_name
+                
+                # Store clash information for next run
+                st.session_state.clash_resolution = {
+                    "input_text": input_text,
+                    "classifier_func": classifier_func,
+                    "rule_func": rule_func
+                }
+                
+                # Force a rerun to show the clash UI
+                st.rerun()
 
         # Continue with normal function execution logic
         print("[DEBUG] Final Function: ", func_name)
