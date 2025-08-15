@@ -1,6 +1,9 @@
-# Boskalis GeoChat Assistant
+# Boskalis GeoChat Assistant v1
 
 A next-generation, agentic chatbot for geotechnical data analysis and compliance reporting. Built for field engineers, supervisors, and project managers, it combines advanced LLMs with domain-specific automation to deliver actionable insights from raw settlement plate data.
+
+v1: ollama context based chatbot
+v2: ollama fine-tuned chatbot (in progress)
 
 ---
 
@@ -8,7 +11,7 @@ A next-generation, agentic chatbot for geotechnical data analysis and compliance
 
 1. **Clone the repository:**
    ```bash
-   git clone <repo_link>
+   git clone https://github.com/gavkujo/NL2Func.git
    cd custom
    ```
 2. **Install dependencies:**
